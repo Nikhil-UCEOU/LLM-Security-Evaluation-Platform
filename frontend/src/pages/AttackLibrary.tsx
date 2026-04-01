@@ -1,34 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import TopBar from '../components/layout/TopBar'
-import { attacksApi } from '../api/attacks'
+import AttackCard from '../components/attacks/AttackCard'
+import AttackDetailPanel from '../components/attacks/AttackDetailPanel'
+import AttackFiltersBar from '../components/attacks/AttackFiltersBar'
+import CreateAttackModal from '../components/attacks/CreateAttackModal'
+import { attacksApi, type AttackFilters } from '../api/attacks'
 import type { AttackTemplate } from '../types/attack'
-import { Database, Plus, Trash2 } from 'lucide-react'
+import { Database, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const categoryColors: Record<string, string> = {
-  prompt_injection: 'text-red-400 bg-red-900/30',
-  jailbreak: 'text-orange-400 bg-orange-900/30',
-  role_play: 'text-purple-400 bg-purple-900/30',
-  indirect_injection: 'text-pink-400 bg-pink-900/30',
-  context_manipulation: 'text-yellow-400 bg-yellow-900/30',
-  multi_turn: 'text-blue-400 bg-blue-900/30',
-  payload_encoding: 'text-cyan-400 bg-cyan-900/30',
-}
 
 export default function AttackLibrary() {
   const [attacks, setAttacks] = useState<AttackTemplate[]>([])
-  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<AttackTemplate | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [filters, setFilters] = useState<AttackFilters>({ sort_by: 'risk_score', sort_dir: 'desc' })
 
-  const load = () => {
+  const load = useCallback((f: AttackFilters = filters) => {
     setLoading(true)
-    attacksApi.list().then(setAttacks).catch(console.error).finally(() => setLoading(false))
-  }
+    attacksApi.list(f)
+      .then(setAttacks)
+      .catch(() => toast.error('Failed to load attacks'))
+      .finally(() => setLoading(false))
+  }, [filters])
 
   useEffect(() => { load() }, [])
 
+  const handleFilterChange = (f: AttackFilters) => {
+    setFilters(f)
+    load(f)
+  }
+
   const seedStatic = async () => {
-    const id = toast.loading('Seeding static attacks...')
+    const id = toast.loading('Seeding attack library...')
     try {
       const res = await attacksApi.seedStatic()
       toast.success(res.message, { id })
@@ -38,77 +42,128 @@ export default function AttackLibrary() {
     }
   }
 
+  const handleMutate = async (attack: AttackTemplate, strategy = 'random') => {
+    const id = toast.loading(`Mutating attack...`)
+    try {
+      const mutated = await attacksApi.mutate(attack.id, strategy)
+      toast.success(`Created mutation: ${mutated.name}`, { id })
+      load()
+      setSelected(mutated)
+    } catch (e: any) {
+      toast.error(e.message, { id })
+    }
+  }
+
+  const handleCreated = (attack: AttackTemplate) => {
+    setShowCreate(false)
+    load()
+    setSelected(attack)
+    toast.success(`Attack "${attack.name}" created!`)
+  }
+
+  // Stats
+  const levelCounts = [1, 2, 3, 4, 5].map(l => ({
+    level: l,
+    count: attacks.filter(a => a.level === l).length,
+  }))
+
   return (
     <div className="flex-1 flex flex-col">
-      <TopBar title="Attack Library" subtitle={`${attacks.length} attack templates`} />
-      <div className="flex-1 p-6 space-y-4">
+      <TopBar
+        title="Attack Library"
+        subtitle={`${attacks.length} attacks across 5 difficulty tiers`}
+      />
 
-        <div className="flex gap-3">
-          <button onClick={seedStatic} className="btn-primary flex items-center gap-2">
-            <Database size={14} /> Seed Static Attacks
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Attack list */}
-          <div className="card overflow-auto max-h-[600px]">
-            <h2 className="text-sm font-semibold text-gray-300 mb-3">Templates</h2>
-            <div className="space-y-2">
-              {attacks.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => setSelected(a)}
-                  className={`w-full text-left p-3 rounded-lg border transition-all ${
-                    selected?.id === a.id
-                      ? 'border-brand-500 bg-brand-500/10'
-                      : 'border-gray-800 bg-gray-800/50 hover:border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-200">{a.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[a.category] || 'text-gray-400 bg-gray-800'}`}>
-                      {a.category.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">{a.description}</div>
-                </button>
-              ))}
-              {attacks.length === 0 && !loading && (
-                <div className="text-center text-gray-500 py-8 text-sm">
-                  No attacks loaded. Click "Seed Static Attacks" to load the built-in library.
-                </div>
-              )}
-            </div>
+      <div className="flex-1 flex flex-col p-6 gap-4 min-h-0">
+        {/* Top action bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={seedStatic} className="btn-secondary flex items-center gap-2 text-sm">
+              <Database size={14} /> Seed Library
+            </button>
+            <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2 text-sm">
+              <Plus size={14} /> Create Attack
+            </button>
+            <button onClick={() => load()} className="p-2 text-gray-500 hover:text-gray-300 transition-colors">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
 
-          {/* Attack detail */}
-          <div className="card">
-            {selected ? (
-              <>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">{selected.name}</h2>
-                    <div className="text-xs text-gray-500 mt-0.5">{selected.description}</div>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${categoryColors[selected.category] || ''}`}>
-                    {selected.source}
-                  </span>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Payload</div>
-                  <pre className="text-xs text-red-300 bg-gray-950 p-4 rounded-lg overflow-auto max-h-72 whitespace-pre-wrap font-mono">
-                    {selected.payload_template}
-                  </pre>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
-                Select an attack to view its payload
+          {/* Level stats pills */}
+          <div className="flex items-center gap-2">
+            {levelCounts.map(({ level, count }) => (
+              <div key={level} className="flex items-center gap-1.5">
+                <LevelBadge level={level} small />
+                <span className="text-gray-500 text-xs">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Filters */}
+        <AttackFiltersBar filters={filters} onChange={handleFilterChange} />
+
+        {/* Main split layout */}
+        <div className="flex gap-4 flex-1 min-h-0">
+          {/* LEFT: Attack list */}
+          <div className="w-80 flex-shrink-0 flex flex-col gap-2 overflow-y-auto pr-1">
+            {loading && attacks.length === 0 && (
+              <div className="flex items-center justify-center h-32 text-gray-500 text-sm gap-2">
+                <RefreshCw size={14} className="animate-spin" /> Loading...
               </div>
             )}
+            {!loading && attacks.length === 0 && (
+              <div className="text-center text-gray-500 py-12 text-sm">
+                <Database size={32} className="mx-auto mb-3 opacity-30" />
+                No attacks found.<br />
+                <button onClick={seedStatic} className="text-brand-500 hover:text-brand-600 mt-1">
+                  Seed the library →
+                </button>
+              </div>
+            )}
+            {attacks.map((a) => (
+              <AttackCard
+                key={a.id}
+                attack={a}
+                selected={selected?.id === a.id}
+                onClick={() => setSelected(a)}
+              />
+            ))}
+          </div>
+
+          {/* RIGHT: Detail panel */}
+          <div className="flex-1 min-w-0">
+            <AttackDetailPanel
+              attack={selected}
+              onMutate={handleMutate}
+              onRefresh={load}
+            />
           </div>
         </div>
       </div>
+
+      {showCreate && (
+        <CreateAttackModal
+          onClose={() => setShowCreate(false)}
+          onCreated={handleCreated}
+        />
+      )}
     </div>
+  )
+}
+
+export function LevelBadge({ level, small = false }: { level: number; small?: boolean }) {
+  const cfg: Record<number, { label: string; cls: string }> = {
+    1: { label: 'L1', cls: 'bg-green-900/60 text-green-300 border-green-700' },
+    2: { label: 'L2', cls: 'bg-yellow-900/60 text-yellow-300 border-yellow-700' },
+    3: { label: 'L3', cls: 'bg-orange-900/60 text-orange-300 border-orange-700' },
+    4: { label: 'L4', cls: 'bg-red-900/60 text-red-300 border-red-700' },
+    5: { label: 'L5', cls: 'bg-purple-900/60 text-purple-300 border-purple-700' },
+  }
+  const { label, cls } = cfg[level] || cfg[1]
+  return (
+    <span className={`inline-flex items-center border font-bold rounded ${cls} ${small ? 'text-[10px] px-1.5 py-0' : 'text-xs px-2 py-0.5'}`}>
+      {label}
+    </span>
   )
 }
