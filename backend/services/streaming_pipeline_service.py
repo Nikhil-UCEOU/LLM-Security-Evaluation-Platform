@@ -223,11 +223,19 @@ async def stream_evaluation_pipeline(
             # ── Escalation check every 5 attacks ──
             if enable_escalation and (idx + 1) % 5 == 0 and idx < total - 1:
                 partial_metrics = compute_isr(result_dicts)
-                decision = decide_escalation(partial_metrics, current_level, max_level)
-                if decision.action != "continue":
-                    new_level = decision.next_level or current_level
+                failed_cats = [
+                    r["category"] for r in result_dicts
+                    if r["classification"] not in (Classification.unsafe, Classification.partial)
+                ]
+                decision = decide_escalation(
+                    current_level=current_level,
+                    success_rate=partial_metrics.global_isr,
+                    failed_categories=failed_cats,
+                )
+                new_level = min(decision.recommended_level, max_level)
+                if new_level != current_level or decision.strategy_switch:
                     yield _sse("escalation_decision", {
-                        "action": decision.action,
+                        "action": "escalate" if new_level > current_level else "diversify",
                         "from_level": current_level,
                         "to_level": new_level,
                         "reason": decision.reason,

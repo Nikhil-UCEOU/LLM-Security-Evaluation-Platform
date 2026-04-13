@@ -252,13 +252,14 @@ export default function EvaluationRun() {
     if (attackMode === 'aggressive') { finalMax = Math.max(maxAttacks, 20); finalMin = 1; finalMax2 = 5 }
     else if (attackMode === 'stealth') { finalMax = Math.min(maxAttacks, 8) }
 
+    const apiKey = (import.meta as any).env?.VITE_API_KEY || 'cortexflow-dev-key'
+
     try {
-      const API_BASE = 'http://localhost:8000/api/v1'
-      const response = await fetch(`${API_BASE}/stream/evaluate`, {
+      const response = await fetch('/api/v1/stream/evaluate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': 'cortexflow-dev-key',
+          'X-API-Key': apiKey,
         },
         body: JSON.stringify({
           provider,

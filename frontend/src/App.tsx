@@ -7,6 +7,7 @@ import Results from './pages/Results'
 import Mitigation from './pages/Mitigation'
 import Learning from './pages/Learning'
 import Settings from './pages/Settings'
+import Benchmark from './pages/Benchmark'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/run" element={<EvaluationRun />} />
           <Route path="/attacks" element={<AttackLibrary />} />
+          <Route path="/benchmark" element={<Benchmark />} />
           <Route path="/results" element={<Results />} />
           <Route path="/results/:runId" element={<Results />} />
           <Route path="/mitigation" element={<Mitigation />} />
