@@ -16,6 +16,35 @@ from pathlib import Path
 
 DATASETS_ROOT = Path(__file__).resolve().parents[3] / "datasets"
 
+# ── Version management ─────────────────────────────────────────────────────
+
+def get_dataset_versions() -> list:
+    """Return all available dataset version directories, sorted newest first."""
+    versions = []
+    for d in DATASETS_ROOT.iterdir():
+        if d.is_dir() and d.name.startswith("v") and d.name[1:].replace(".", "").isdigit():
+            versions.append(d.name)
+    return sorted(versions, reverse=True)
+
+
+def get_versioned_category_path(category: str, version: Optional[str] = None) -> Path:
+    """
+    Resolve the path for a category.
+    If version is given (e.g. 'v1'), looks in datasets/v1/<category>.
+    If None, tries the latest version first, then falls back to flat layout.
+    """
+    if version:
+        p = DATASETS_ROOT / version / category
+        if p.exists():
+            return p
+    # Try latest versioned folder
+    for ver in get_dataset_versions():
+        p = DATASETS_ROOT / ver / category
+        if p.exists():
+            return p
+    # Fallback: flat legacy layout
+    return DATASETS_ROOT / category
+
 
 @dataclass
 class NormalizedAttack:
@@ -145,9 +174,9 @@ def load_dataset_file(path: str, source: Optional[str] = None) -> List[Normalize
     return []
 
 
-def load_category(category: str) -> List[NormalizedAttack]:
-    """Load all dataset files in a category folder."""
-    cat_dir = DATASETS_ROOT / category
+def load_category(category: str, version: Optional[str] = None) -> List[NormalizedAttack]:
+    """Load all dataset files in a category folder (version-aware)."""
+    cat_dir = get_versioned_category_path(category, version)
     if not cat_dir.exists():
         return []
     results = []
@@ -159,29 +188,67 @@ def load_category(category: str) -> List[NormalizedAttack]:
 
 def load_all_datasets(
     categories: Optional[List[str]] = None,
+    version: Optional[str] = None,
 ) -> Dict[str, List[NormalizedAttack]]:
     """Load all datasets, optionally filtered by category names."""
-    available_cats = [
+    # Collect categories from flat layout + versioned layout
+    flat_cats = [
         d.name for d in DATASETS_ROOT.iterdir()
-        if d.is_dir() and d.name not in ("seed", "benchmark")
+        if d.is_dir() and d.name not in ("seed", "benchmark") and not d.name.startswith("v")
     ]
+    versioned_cats: list = []
+    active_ver = version or (get_dataset_versions()[0] if get_dataset_versions() else None)
+    if active_ver:
+        ver_dir = DATASETS_ROOT / active_ver
+        if ver_dir.exists():
+            versioned_cats = [d.name for d in ver_dir.iterdir() if d.is_dir()]
+
+    all_cats = list({*flat_cats, *versioned_cats})
     if categories:
-        available_cats = [c for c in available_cats if c in categories]
+        all_cats = [c for c in all_cats if c in categories]
 
-    return {cat: load_category(cat) for cat in available_cats}
+    return {cat: load_category(cat, version=version) for cat in sorted(all_cats)}
 
 
-def get_available_datasets() -> List[Dict[str, Any]]:
-    """Return metadata about available datasets (for UI dropdown)."""
-    result = []
+def get_available_datasets(version: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Return metadata about available datasets (for UI dropdown), version-aware."""
+    import json as _json
+
+    # Determine active version
+    versions = get_dataset_versions()
+    active_ver = version or (versions[0] if versions else None)
+
+    # Load version metadata if available
+    ver_meta: Dict[str, Any] = {}
+    if active_ver:
+        meta_path = DATASETS_ROOT / active_ver / "metadata.json"
+        if meta_path.exists():
+            try:
+                ver_meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    # Gather category dirs
+    cat_dirs: Dict[str, Path] = {}
     for d in sorted(DATASETS_ROOT.iterdir()):
-        if not d.is_dir() or d.name in ("seed", "benchmark"):
+        if not d.is_dir() or d.name in ("seed", "benchmark") or d.name.startswith("v"):
             continue
-        files = list(d.glob("*.json")) + list(d.glob("*.jsonl")) + list(d.glob("*.csv"))
-        attacks = load_category(d.name)
+        cat_dirs[d.name] = d
+    if active_ver:
+        ver_root = DATASETS_ROOT / active_ver
+        if ver_root.exists():
+            for d in sorted(ver_root.iterdir()):
+                if d.is_dir() and d.name not in ("seed", "benchmark") and not d.name.startswith("v"):
+                    cat_dirs[d.name] = d  # versioned takes precedence
+
+    result = []
+    for name, cat_dir in sorted(cat_dirs.items()):
+        files = list(cat_dir.glob("*.json")) + list(cat_dir.glob("*.jsonl")) + list(cat_dir.glob("*.csv"))
+        attacks = load_category(name, version=version)
+        cat_meta = ver_meta.get("categories", {}).get(name, {})
         result.append({
-            "name": d.name,
-            "label": d.name.replace("_", " ").title(),
+            "name": name,
+            "label": name.replace("_", " ").title(),
             "files": len(files),
             "total_attacks": len(attacks),
             "categories": list({a.category for a in attacks}),
@@ -189,5 +256,24 @@ def get_available_datasets() -> List[Dict[str, Any]]:
                 sev: sum(1 for a in attacks if a.severity == sev)
                 for sev in ("critical", "high", "medium", "low")
             },
+            "description": cat_meta.get("description", ""),
+            "version": active_ver or "flat",
         })
     return result
+
+
+def get_version_info() -> Dict[str, Any]:
+    """Return information about all dataset versions."""
+    import json as _json
+    versions = get_dataset_versions()
+    info: List[Dict[str, Any]] = []
+    for ver in versions:
+        meta_path = DATASETS_ROOT / ver / "metadata.json"
+        meta: Dict[str, Any] = {"version": ver}
+        if meta_path.exists():
+            try:
+                meta.update(_json.loads(meta_path.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+        info.append(meta)
+    return {"versions": versions, "latest": versions[0] if versions else None, "details": info}

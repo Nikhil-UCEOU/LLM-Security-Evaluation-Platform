@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TopBar from '../components/layout/TopBar'
 import { benchmarkApi, type BenchmarkResult, type DatasetInfo } from '../api/benchmark'
+import client from '../api/client'
 import toast from 'react-hot-toast'
 import {
   Play, Loader, Database, BarChart3, TrendingUp, ShieldAlert,
   ChevronDown, CheckCircle, Clock, RefreshCw, Target, Zap,
-  AlertTriangle, BookOpen, FileText,
+  AlertTriangle, BookOpen, FileText, Upload, X, FolderOpen,
+  CheckSquare, Shield, ChevronRight,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -108,6 +110,228 @@ function CompareTable({ results }: { results: BenchmarkResult[] }) {
   )
 }
 
+// ── Upload Panel component ─────────────────────────────────────────────────
+
+const UPLOAD_CATEGORIES = ['jailbreak', 'prompt_injection', 'rag', 'tool_misuse', 'adversarial', 'custom']
+
+function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [category, setCategory] = useState('jailbreak')
+  const [version, setVersion] = useState('v1')
+  const [validateFirst, setValidateFirst] = useState(true)
+  const [autoClassify, setAutoClassify] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [validationResult, setValidationResult] = useState<any>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = (f: File) => {
+    setFile(f)
+    setValidationResult(null)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer.files[0]
+    if (f) handleFile(f)
+  }
+
+  const handleValidate = async () => {
+    if (!file) return
+    setValidating(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await client.post('/benchmark/validate', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setValidationResult(res.data)
+      if (res.data.is_valid) {
+        toast.success(`Validation passed — ${res.data.passed}/${res.data.total} attacks OK`)
+      } else {
+        toast.error(`${res.data.failed} attacks failed validation`)
+      }
+    } catch (e: any) {
+      toast.error('Validation error: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('category', category)
+      fd.append('version', version)
+      fd.append('validate_first', String(validateFirst))
+      fd.append('auto_classify', String(autoClassify))
+      const res = await client.post('/benchmark/upload', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      toast.success(`Uploaded → ${res.data.saved_to} (${res.data.attacks_parsed ?? '?'} attacks)`)
+      setFile(null)
+      setValidationResult(null)
+      onUploaded()
+    } catch (e: any) {
+      const detail = e.response?.data?.detail
+      if (detail?.message) {
+        toast.error(detail.message)
+        if (detail.validation) setValidationResult(detail.validation)
+      } else {
+        toast.error('Upload failed: ' + (detail || e.message))
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => fileRef.current?.click()}
+        className={`relative border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all text-center ${
+          dragOver
+            ? 'border-accent-red/60 bg-red-950/20'
+            : file
+            ? 'border-emerald-700/60 bg-emerald-950/20'
+            : 'border-gray-700 hover:border-gray-600 bg-gray-900/40'
+        }`}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,.jsonl,.csv,.txt"
+          className="hidden"
+          onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+        {file ? (
+          <div className="flex items-center gap-2 justify-center">
+            <FileText size={14} className="text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-medium truncate max-w-[150px]">{file.name}</span>
+            <button
+              onClick={e => { e.stopPropagation(); setFile(null); setValidationResult(null) }}
+              className="text-gray-600 hover:text-red-400 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <Upload size={20} className="mx-auto mb-1 text-gray-600" />
+            <p className="text-xs text-gray-500">Drop file or click to browse</p>
+            <p className="text-[10px] text-gray-700 mt-0.5">JSON · JSONL · CSV · TXT</p>
+          </>
+        )}
+      </div>
+
+      {/* Category + Version */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-gray-600 uppercase tracking-wide block mb-1">Category</label>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-accent-red/50"
+          >
+            {UPLOAD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-600 uppercase tracking-wide block mb-1">Version</label>
+          <input
+            value={version}
+            onChange={e => setVersion(e.target.value)}
+            placeholder="v1"
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-accent-red/50"
+          />
+        </div>
+      </div>
+
+      {/* Toggles */}
+      <div className="space-y-1.5">
+        {[
+          { label: 'Validate before saving', value: validateFirst, set: setValidateFirst,
+            desc: 'Reject file if attacks have errors' },
+          { label: 'Auto-classify attacks', value: autoClassify, set: setAutoClassify,
+            desc: 'Tag missing category/strategy/severity' },
+        ].map(({ label, value, set, desc }) => (
+          <button
+            key={label}
+            onClick={() => set(!value)}
+            className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-gray-800/50 transition-colors text-left"
+          >
+            <div className={`w-8 h-4 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-accent-red' : 'bg-gray-700'}`}>
+              <div className={`w-3 h-3 bg-white rounded-full mt-0.5 transition-transform ${value ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+            <div>
+              <div className="text-xs text-gray-300">{label}</div>
+              <div className="text-[10px] text-gray-600">{desc}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Validation report */}
+      {validationResult && (
+        <div className={`p-3 rounded-xl border text-xs ${
+          validationResult.is_valid
+            ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
+            : 'bg-red-950/30 border-red-800/50 text-red-300'
+        }`}>
+          <div className="font-bold mb-1">
+            {validationResult.is_valid ? '✓ Validation Passed' : '✗ Validation Failed'}
+          </div>
+          <div className="text-[10px] space-y-0.5 text-gray-400">
+            <div>{validationResult.passed}/{validationResult.total} attacks passed</div>
+            {validationResult.warnings > 0 && <div>{validationResult.warnings} warnings</div>}
+            {validationResult.issues?.slice(0, 3).map((issue: any, i: number) => (
+              <div key={i} className={`${issue.level === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
+                [{issue.code}] {issue.attack_id}: {issue.message}
+              </div>
+            ))}
+            {(validationResult.issues?.length || 0) > 3 && (
+              <div className="text-gray-600">+{validationResult.issues.length - 3} more issues</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleValidate}
+          disabled={!file || validating}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300
+                     hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {validating ? <Loader size={11} className="animate-spin" /> : <CheckSquare size={11} />}
+          Validate
+        </button>
+        <button
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold text-white
+                     bg-accent-red hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {uploading ? <Loader size={11} className="animate-spin" /> : <Upload size={11} />}
+          Upload
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────
+
 export default function Benchmark() {
   const [datasets, setDatasets] = useState<DatasetInfo[]>([])
   const [history, setHistory] = useState<BenchmarkResult[]>([])
@@ -120,6 +344,7 @@ export default function Benchmark() {
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
 
   const selectedProvider = PROVIDERS.find(p => p.id === provider)
 
@@ -181,10 +406,36 @@ export default function Benchmark() {
 
             {/* Dataset selector */}
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Database size={13} className="text-accent-red" />
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Dataset</h2>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Database size={13} className="text-accent-red" />
+                  <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Dataset</h2>
+                </div>
+                <button
+                  onClick={() => setShowUpload(v => !v)}
+                  className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border transition-all ${
+                    showUpload
+                      ? 'border-accent-red/50 bg-red-950/30 text-accent-red'
+                      : 'border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                  }`}
+                >
+                  <Upload size={10} />
+                  {showUpload ? 'Hide Upload' : 'Upload'}
+                </button>
               </div>
+
+              {showUpload && (
+                <div className="mb-4 p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <FolderOpen size={10} /> Upload Dataset
+                  </div>
+                  <UploadPanel onUploaded={() => {
+                    benchmarkApi.datasets().then(setDatasets).catch(() => {})
+                    setShowUpload(false)
+                  }} />
+                </div>
+              )}
+
               {datasets.length === 0 ? (
                 <div className="text-xs text-gray-600">Loading datasets...</div>
               ) : (

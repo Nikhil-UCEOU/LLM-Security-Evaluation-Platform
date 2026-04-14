@@ -9,70 +9,63 @@
                       radial-gradient(ellipse at 20% 100%, rgba(79,110,247,0.06) 0%, transparent 60%);
     background-attachment: fixed;
   }
-
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: #0d1117; }
   ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
 }
 
 @layer components {
-  .card {
-    @apply bg-gray-900/80 border border-gray-800 rounded-xl p-6 backdrop-blur-sm;
-  }
-  .card-sm {
-    @apply bg-gray-900/80 border border-gray-800 rounded-xl p-4 backdrop-blur-sm;
-  }
+  .card    { @apply bg-gray-900 border border-gray-800 rounded-xl p-6; }
+  .card-sm { @apply bg-gray-900 border border-gray-800 rounded-xl p-4; }
+
+  /* ── Buttons — no hover: variants in @apply (Tailwind v3 restriction) ── */
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium
-           transition-all disabled:opacity-40 disabled:cursor-not-allowed
-           shadow-md hover:shadow-glow-brand;
+    @apply bg-brand-500 text-white px-4 py-2 rounded-lg font-medium
+           transition-all shadow-md
+           disabled:opacity-40 disabled:cursor-not-allowed;
   }
+  .btn-primary:hover:not(:disabled) { background-color: #3b55e6; }
+
   .btn-danger {
-    @apply bg-accent-red hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium
-           transition-all disabled:opacity-40 disabled:cursor-not-allowed
-           shadow-md hover:shadow-glow-red;
+    @apply text-white px-4 py-2 rounded-lg font-medium
+           transition-all shadow-md
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    background-color: #e8003d;
   }
+  .btn-danger:hover:not(:disabled) { background-color: #c8003a; }
+
   .btn-secondary {
-    @apply bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2
-           rounded-lg font-medium transition-all hover:border-gray-600;
+    @apply bg-gray-800 border border-gray-700 text-gray-200 px-4 py-2
+           rounded-lg font-medium transition-all;
   }
+  .btn-secondary:hover { @apply bg-gray-700 border-gray-600; }
 
-  /* Risk badges */
-  .badge-critical { @apply bg-red-950/60 text-red-300 border border-red-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-high     { @apply bg-orange-950/60 text-orange-300 border border-orange-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-medium   { @apply bg-yellow-950/60 text-yellow-300 border border-yellow-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-low      { @apply bg-blue-950/60 text-blue-300 border border-blue-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-safe     { @apply bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-unsafe   { @apply bg-red-950/60 text-red-300 border border-red-800/60 text-xs font-semibold px-2 py-0.5 rounded-full; }
-
-  /* Glowing accent borders */
-  .border-glow-red   { @apply border-accent-red/40 shadow-glow-red; }
-  .border-glow-brand { @apply border-brand-500/40 shadow-glow-brand; }
-
-  /* Stat pill */
-  .stat-pill {
-    @apply flex flex-col items-center justify-center bg-gray-900 border border-gray-800
-           rounded-xl px-4 py-3 min-w-[80px];
-  }
+  /* Risk / severity badges */
+  .badge-critical { @apply bg-red-950 text-red-300 border border-red-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  .badge-high     { @apply bg-orange-950 text-orange-300 border border-orange-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  .badge-medium   { @apply bg-yellow-950 text-yellow-300 border border-yellow-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  .badge-low      { @apply bg-blue-950 text-blue-300 border border-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  .badge-safe     { @apply bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  .badge-unsafe   { @apply bg-red-950 text-red-300 border border-red-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
 }
 
 /* ── Keyframe animations ── */
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.4; }
 }
 .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
 
 @keyframes slide-in-right {
-  from { transform: translateX(24px); opacity: 0; }
+  from { transform: translateX(20px); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
-.animate-slide-in { animation: slide-in-right 0.25s ease-out forwards; }
+.animate-slide-in { animation: slide-in-right 0.2s ease-out forwards; }
 
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  100% { background-position:  200% 0; }
 }
 .shimmer {
   background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);

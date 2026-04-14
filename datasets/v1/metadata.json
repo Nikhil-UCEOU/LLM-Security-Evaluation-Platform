@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "created": "2025-01-01",
+  "description": "CortexFlow AI — Initial curated attack dataset (v1). Hand-crafted high-quality samples across 4 categories.",
+  "categories": {
+    "jailbreak": {
+      "count": 10,
+      "description": "Persona hijacking and policy bypass attacks",
+      "severity_distribution": { "critical": 6, "high": 3, "medium": 1 }
+    },
+    "prompt_injection": {
+      "count": 10,
+      "description": "Direct and indirect prompt injection vectors",
+      "severity_distribution": { "critical": 3, "high": 5, "medium": 2 }
+    },
+    "rag": {
+      "count": 5,
+      "description": "RAG pipeline poisoning and retrieval manipulation",
+      "severity_distribution": { "critical": 2, "high": 2, "medium": 1 }
+    },
+    "tool_misuse": {
+      "count": 5,
+      "description": "Tool calling and API abuse attacks",
+      "severity_distribution": { "critical": 2, "high": 3, "medium": 0 }
+    }
+  },
+  "total_attacks": 30,
+  "changelog": [
+    { "version": "1.0.0", "date": "2025-01-01", "note": "Initial dataset release with 30 curated attacks across 4 categories" }
+  ]
+}
