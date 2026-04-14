@@ -277,6 +277,15 @@ async def upload_dataset(
 
     dest_path.write_bytes(raw)
 
+    # Auto-refresh seed pipeline so uploaded attacks are immediately available
+    # to the evaluation engine (build_attack_list loads from seed_attacks.json)
+    seeds_refreshed: Optional[int] = None
+    try:
+        seeds = run_seed_pipeline(force_refresh=True)
+        seeds_refreshed = len(seeds)
+    except Exception:
+        pass  # Seed refresh is best-effort; don't fail the upload
+
     return {
         "saved_to": str(dest_path.relative_to(DATASETS_ROOT)),
         "category": category,
@@ -286,6 +295,7 @@ async def upload_dataset(
         "attacks_parsed": len(attacks_list) if attacks_list else None,
         "validation": validation_report,
         "auto_classified": auto_classify and attacks_list is not None,
+        "seeds_refreshed": seeds_refreshed,
     }
 
 
