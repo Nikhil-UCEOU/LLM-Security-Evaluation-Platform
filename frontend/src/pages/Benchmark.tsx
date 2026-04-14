@@ -345,6 +345,9 @@ export default function Benchmark() {
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  const [previewDataset, setPreviewDataset] = useState<string | null>(null)
+  const [previewAttacks, setPreviewAttacks] = useState<any[]>([])
+  const [loadingPreview, setLoadingPreview] = useState(false)
 
   const selectedProvider = PROVIDERS.find(p => p.id === provider)
 
@@ -352,6 +355,17 @@ export default function Benchmark() {
     benchmarkApi.datasets().then(setDatasets).catch(() => {})
     loadHistory()
   }, [])
+
+  const loadDatasetPreview = async (name: string) => {
+    if (previewDataset === name) { setPreviewDataset(null); return }
+    setPreviewDataset(name)
+    setLoadingPreview(true)
+    try {
+      const res = await client.get(`/benchmark/dataset/${name}/attacks`, { params: { limit: 30 } })
+      setPreviewAttacks(res.data.attacks || [])
+    } catch { setPreviewAttacks([]) }
+    setLoadingPreview(false)
+  }
 
   const loadHistory = async () => {
     setLoadingHistory(true)
@@ -441,35 +455,78 @@ export default function Benchmark() {
               ) : (
                 <div className="space-y-2">
                   {datasets.map(ds => (
-                    <button
-                      key={ds.name}
-                      onClick={() => setSelectedDataset(ds.name)}
-                      className={`w-full text-left p-3 rounded-xl border transition-all ${
-                        selectedDataset === ds.name
-                          ? 'border-accent-red/60 bg-red-950/20 text-white'
-                          : 'border-gray-800 bg-gray-900/50 text-gray-400 hover:border-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold capitalize">{ds.label}</span>
-                        <span className="text-[10px] text-gray-600">{ds.total_attacks} attacks</span>
+                    <div key={ds.name}>
+                      <div
+                        className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                          selectedDataset === ds.name
+                            ? 'border-accent-red/60 bg-red-950/20 text-white'
+                            : 'border-gray-800 bg-gray-900/50 text-gray-400 hover:border-gray-700'
+                        }`}
+                        onClick={() => setSelectedDataset(ds.name)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold capitalize">{ds.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-600">{ds.total_attacks} attacks</span>
+                            <button
+                              onClick={e => { e.stopPropagation(); loadDatasetPreview(ds.name) }}
+                              className={`text-[9px] px-1.5 py-0.5 rounded border transition-all ${
+                                previewDataset === ds.name
+                                  ? 'border-brand-500/60 text-brand-400 bg-brand-500/10'
+                                  : 'border-gray-700 text-gray-600 hover:text-gray-400'
+                              }`}
+                            >
+                              {previewDataset === ds.name ? 'Hide' : 'Preview'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {ds.categories.map(c => (
+                            <span key={c} className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-500 capitalize">
+                              {c.replace('_', ' ')}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 mt-1.5">
+                          {ds.severities.critical > 0 && <span className="text-[9px] text-red-400">{ds.severities.critical} critical</span>}
+                          {ds.severities.high > 0 && <span className="text-[9px] text-orange-400">{ds.severities.high} high</span>}
+                          {ds.description && <span className="text-[9px] text-gray-600 truncate">{ds.description}</span>}
+                        </div>
                       </div>
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {ds.categories.map(c => (
-                          <span key={c} className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-500 capitalize">
-                            {c.replace('_', ' ')}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex gap-2 mt-1.5">
-                        {ds.severities.critical > 0 && (
-                          <span className="text-[9px] text-red-400">{ds.severities.critical} critical</span>
-                        )}
-                        {ds.severities.high > 0 && (
-                          <span className="text-[9px] text-orange-400">{ds.severities.high} high</span>
-                        )}
-                      </div>
-                    </button>
+                      {/* Attack preview panel */}
+                      {previewDataset === ds.name && (
+                        <div className="mt-1 mb-2 border border-gray-800 rounded-xl bg-gray-950/50 overflow-hidden">
+                          <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                              {ds.label} — Attacks Preview
+                            </span>
+                            {loadingPreview && <Loader size={10} className="animate-spin text-gray-500" />}
+                          </div>
+                          {previewAttacks.length === 0 && !loadingPreview ? (
+                            <div className="p-3 text-xs text-gray-600">No attacks found</div>
+                          ) : (
+                            <div className="max-h-64 overflow-y-auto divide-y divide-gray-800/50">
+                              {previewAttacks.map((atk, i) => (
+                                <div key={atk.id || i} className="px-3 py-2 hover:bg-gray-800/30 transition-colors">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-[9px] font-mono text-gray-600">{atk.id}</span>
+                                    <span className={`text-[9px] font-bold px-1 rounded ${
+                                      atk.severity === 'critical' ? 'bg-red-950/60 text-red-400' :
+                                      atk.severity === 'high' ? 'bg-orange-950/60 text-orange-400' :
+                                      'bg-yellow-950/60 text-yellow-400'
+                                    }`}>{atk.severity}</span>
+                                    <span className="text-[9px] text-gray-600">{atk.strategy?.replace(/_/g, ' ')}</span>
+                                  </div>
+                                  <p className="text-[10px] text-gray-400 leading-relaxed line-clamp-2">
+                                    {atk.prompt}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -669,12 +726,52 @@ export default function Benchmark() {
             </div>
           )}
 
-          {/* Empty state */}
+          {/* Empty state — show seeds and instructions */}
           {!result && !running && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-700">
-              <BookOpen size={48} className="mb-4 opacity-20" />
-              <p className="text-sm font-medium">Select a dataset and run benchmark</p>
-              <p className="text-xs mt-1 opacity-60">Results will appear here</p>
+            <div className="space-y-4">
+              {/* Quick start guide */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen size={14} className="text-accent-red" />
+                  <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wide">Quick Start</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { step: '1', label: 'Pick a Dataset', desc: 'Select from the left panel. Click "Preview" to see attacks.' },
+                    { step: '2', label: 'Choose a Model', desc: 'Select provider + model. Try Ollama locally (tinyllama, mistral).' },
+                    { step: '3', label: 'Run Benchmark', desc: 'No mutation, no RL — pure deterministic evaluation.' },
+                  ].map(({ step, label, desc }) => (
+                    <div key={step} className="bg-gray-950 rounded-xl p-3 flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-accent-red/20 border border-accent-red/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-accent-red">{step}</div>
+                      <div>
+                        <div className="text-xs font-semibold text-white mb-0.5">{label}</div>
+                        <div className="text-[10px] text-gray-500 leading-relaxed">{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Model tier guidance */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target size={13} className="text-accent-red" />
+                  <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wide">Model Tiers — Testing Strategy</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { tier: 'Tier 1 — Weak', models: 'TinyLlama, Phi-2', color: 'text-emerald-400', border: 'border-emerald-800/40', bg: 'bg-emerald-950/20', desc: 'High ISR — great for demo, proves system works' },
+                    { tier: 'Tier 2 — Medium', models: 'LLaMA 3, Mistral', color: 'text-yellow-400', border: 'border-yellow-800/40', bg: 'bg-yellow-950/20', desc: 'Realistic targets used in production systems' },
+                    { tier: 'Tier 3 — Strong', models: 'GPT-4o, Claude', color: 'text-red-400', border: 'border-red-800/40', bg: 'bg-red-950/20', desc: 'Advanced attacks required — system-level testing' },
+                  ].map(({ tier, models, color, border, bg, desc }) => (
+                    <div key={tier} className={`${bg} border ${border} rounded-xl p-3`}>
+                      <div className={`text-xs font-bold ${color} mb-1`}>{tier}</div>
+                      <div className="text-[10px] text-gray-400 font-medium mb-1">{models}</div>
+                      <div className="text-[10px] text-gray-600">{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 

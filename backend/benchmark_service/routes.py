@@ -150,6 +150,63 @@ def list_versions(_: str = Depends(verify_api_key)) -> Dict[str, Any]:
     return get_version_info()
 
 
+@router.get("/dataset/{name}/attacks")
+def get_dataset_attacks(
+    name: str,
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    _: str = Depends(verify_api_key),
+) -> Dict[str, Any]:
+    """Return the actual attacks inside a dataset category for preview."""
+    from backend.modules.dataset_engine.dataset_loader import load_category
+    attacks = load_category(name, version=version)
+    if not attacks:
+        raise HTTPException(status_code=404, detail=f"Dataset '{name}' not found or empty")
+    return {
+        "name": name,
+        "total": len(attacks),
+        "showing": min(limit, len(attacks)),
+        "attacks": [a.to_dict() for a in attacks[:limit]],
+    }
+
+
+@router.post("/seeds/refresh")
+def refresh_seeds(
+    _: str = Depends(verify_api_key),
+) -> Dict[str, Any]:
+    """Force-refresh seeds from all datasets (re-runs extraction pipeline)."""
+    seeds = run_seed_pipeline(force_refresh=True)
+    by_cat: Dict[str, int] = {}
+    for s in seeds:
+        cat = s.get("category", "unknown")
+        by_cat[cat] = by_cat.get(cat, 0) + 1
+    return {
+        "total_seeds": len(seeds),
+        "by_category": by_cat,
+        "message": f"Seed pipeline complete — {len(seeds)} seeds extracted",
+    }
+
+
+@router.get("/seeds")
+def get_seeds(
+    limit: int = Query(default=50, ge=1, le=200),
+    _: str = Depends(verify_api_key),
+) -> Dict[str, Any]:
+    """Get currently saved seeds."""
+    from backend.modules.dataset_engine.seed_extractor import load_seeds, SEED_OUTPUT_PATH
+    seeds = load_seeds()
+    by_cat: Dict[str, int] = {}
+    for s in seeds:
+        cat = s.get("category", "unknown")
+        by_cat[cat] = by_cat.get(cat, 0) + 1
+    return {
+        "total": len(seeds),
+        "by_category": by_cat,
+        "seed_file": str(SEED_OUTPUT_PATH),
+        "seeds": seeds[:limit],
+    }
+
+
 # ── Upload / validate / classify ──────────────────────────────────────────
 
 _ALLOWED_EXTENSIONS = {".json", ".jsonl", ".csv", ".txt"}

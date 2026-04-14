@@ -34,6 +34,8 @@ export interface DatasetInfo {
   total_attacks: number
   categories: string[]
   severities: Record<string, number>
+  description?: string
+  version?: string
 }
 
 export const benchmarkApi = {
