@@ -6,8 +6,127 @@ import AttackFiltersBar from '../components/attacks/AttackFiltersBar'
 import CreateAttackModal from '../components/attacks/CreateAttackModal'
 import { attacksApi, type AttackFilters } from '../api/attacks'
 import type { AttackTemplate } from '../types/attack'
-import { Database, Plus, RefreshCw, Cpu, Zap, Shield, ChevronRight, Info } from 'lucide-react'
+import { Database, Plus, RefreshCw, Cpu, Zap, Shield, ChevronRight, Info, BookOpen, X, Lightbulb } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+// ── Guide Modal ───────────────────────────────────────────────────────────
+
+function GuideModal({ onClose }: { onClose: () => void }) {
+  const steps = [
+    {
+      num: '1', title: 'Seed the Library',
+      body: 'Click "Seed Library" to load all built-in attack templates (60+ attacks across 11 categories). You only need to do this once.',
+      color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/50',
+    },
+    {
+      num: '2', title: 'Pick a Target Model',
+      body: 'Use the Model Tiers tab to choose a model. Start with Weak models (TinyLlama, Dolphin-Mistral) — they should show 70–95% attack success. Once attacks work, test Medium and Strong models.',
+      color: 'text-yellow-400', bg: 'bg-yellow-950/30', border: 'border-yellow-800/50',
+    },
+    {
+      num: '3', title: 'Browse Attacks',
+      body: 'Filter attacks by Level (L1 = simplest, L5 = advanced). Click any attack card to see its full payload, strategy, and what it tests. L1–L2 attacks are best for weak models.',
+      color: 'text-blue-400', bg: 'bg-blue-950/30', border: 'border-blue-800/50',
+    },
+    {
+      num: '4', title: 'Mutate Attacks',
+      body: 'Select an attack and click "Generate Variant" in the detail panel. Mutations add obfuscation, encoding, or persona framing to make an attack harder to block.',
+      color: 'text-purple-400', bg: 'bg-purple-950/30', border: 'border-purple-800/50',
+    },
+    {
+      num: '5', title: 'Run the Evaluation',
+      body: 'Go to Evaluation Run, paste your target model\'s system prompt, select your provider/model, and click Launch Evaluation. The library attacks are used automatically.',
+      color: 'text-pink-400', bg: 'bg-pink-950/30', border: 'border-pink-800/50',
+    },
+  ]
+  const categories = [
+    { name: 'Prompt Injection', desc: 'Override the model\'s instructions directly', level: 'L1–L2' },
+    { name: 'Jailbreak', desc: 'DAN, AIM, persona bypass to remove restrictions', level: 'L1–L2' },
+    { name: 'Role Play', desc: 'Character framing to bypass safety', level: 'L2–L3' },
+    { name: 'Context Manipulation', desc: 'Confuse or overload the model\'s context window', level: 'L2–L3' },
+    { name: 'Payload Encoding', desc: 'Base64, leetspeak, unicode to evade filters', level: 'L2–L3' },
+    { name: 'Indirect Injection', desc: 'Inject via documents, emails, search results', level: 'L3–L4' },
+    { name: 'RAG Poisoning', desc: 'Poison retrieved documents in RAG pipelines', level: 'L3–L4' },
+    { name: 'API Abuse', desc: 'Inject via tool/API responses', level: 'L3–L4' },
+    { name: 'Cognitive', desc: 'Authority, urgency, logic traps', level: 'L3–L4' },
+    { name: 'Multi-Turn', desc: 'Gradual trust erosion across conversation turns', level: 'L4–L5' },
+    { name: 'Strategy Based', desc: 'Complex coordinated multi-stage attacks', level: 'L5' },
+  ]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border"
+        style={{ background: '#0d1017', borderColor: 'rgba(255,255,255,0.1)' }}>
+        <div className="sticky top-0 flex items-center justify-between p-5 border-b" style={{ background: '#0d1017', borderColor: 'rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2">
+            <BookOpen size={16} className="text-pink-400" />
+            <h2 className="text-sm font-bold text-white">Attack Library — Quick Guide</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5 space-y-5">
+          {/* Steps */}
+          <div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">How to use this library</div>
+            <div className="space-y-2">
+              {steps.map(s => (
+                <div key={s.num} className={`flex gap-3 p-3 rounded-xl border ${s.bg} ${s.border}`}>
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5 ${s.color} border ${s.border}`}>{s.num}</div>
+                  <div>
+                    <div className={`text-xs font-semibold mb-0.5 ${s.color}`}>{s.title}</div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">{s.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Attack levels */}
+          <div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Attack Levels Explained</div>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { l: 'L1', label: 'Direct', desc: 'Basic overrides — work on unguarded models', color: 'text-green-400', bg: 'bg-green-950/30 border-green-800/50' },
+                { l: 'L2', label: 'Paraphrased', desc: 'Roleplay, encoding, soft jailbreaks', color: 'text-yellow-400', bg: 'bg-yellow-950/30 border-yellow-800/50' },
+                { l: 'L3', label: 'Contextual', desc: 'RAG, API, document injection', color: 'text-orange-400', bg: 'bg-orange-950/30 border-orange-800/50' },
+                { l: 'L4', label: 'Multi-Turn', desc: 'Trust erosion, cognitive tricks', color: 'text-red-400', bg: 'bg-red-950/30 border-red-800/50' },
+                { l: 'L5', label: 'Adaptive', desc: 'Coordinated multi-stage attacks', color: 'text-purple-400', bg: 'bg-purple-950/30 border-purple-800/50' },
+              ].map(l => (
+                <div key={l.l} className={`p-2 rounded-xl border text-center ${l.bg}`}>
+                  <div className={`text-sm font-bold ${l.color}`}>{l.l}</div>
+                  <div className="text-[10px] font-medium text-gray-300 mb-1">{l.label}</div>
+                  <p className="text-[9px] text-gray-500">{l.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Categories */}
+          <div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Attack Categories</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {categories.map(c => (
+                <div key={c.name} className="flex items-start gap-2 p-2 rounded-lg border" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 font-mono flex-shrink-0 mt-0.5">{c.level}</span>
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-300">{c.name}</div>
+                    <div className="text-[9px] text-gray-600">{c.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Tip */}
+          <div className="flex gap-2 p-3 rounded-xl border" style={{ background: 'rgba(232,0,61,0.05)', borderColor: 'rgba(232,0,61,0.2)' }}>
+            <Lightbulb size={14} className="text-pink-400 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-gray-400">
+              <span className="text-pink-300 font-semibold">Pro tip:</span> Run the Benchmark page first with a weak model (Dolphin-Mistral) against the Jailbreak dataset. You should see 60–90% ISR. If attacks aren't succeeding, check that Ollama is running and the model is downloaded.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Model Tier Data ───────────────────────────────────────────────────────
 
@@ -15,56 +134,59 @@ const MODEL_TIERS = [
   {
     tier: 'Tier 1',
     label: 'Weak Models',
-    sublabel: 'High vulnerability — best for demos',
+    sublabel: 'Uncensored/tiny — attacks WILL succeed here',
     color: 'text-emerald-400',
     border: 'border-emerald-700/50',
     bg: 'bg-emerald-950/20',
     activeBg: 'bg-emerald-950/40',
     dotColor: 'bg-emerald-400',
     models: [
-      { name: 'TinyLlama 1B',   provider: 'ollama',      cmd: 'ollama run tinyllama',  resistance: 10 },
-      { name: 'Phi-2',           provider: 'ollama',      cmd: 'ollama run phi',        resistance: 15 },
-      { name: 'Gemma 2B',        provider: 'ollama',      cmd: 'ollama run gemma:2b',   resistance: 20 },
-      { name: 'GPT-2 (local)',   provider: 'huggingface', cmd: 'gpt2',                  resistance: 5  },
+      { name: 'Dolphin Mistral 7B',  provider: 'ollama', cmd: 'ollama pull dolphin-mistral',          resistance: 5  },
+      { name: 'Dolphin LLaMA 3 8B',  provider: 'ollama', cmd: 'ollama pull dolphin-llama3',           resistance: 8  },
+      { name: 'LLaMA 2 Uncensored',  provider: 'ollama', cmd: 'ollama pull llama2-uncensored',        resistance: 10 },
+      { name: 'TinyLlama 1.1B',      provider: 'ollama', cmd: 'ollama pull tinyllama',               resistance: 12 },
+      { name: 'Phi-2 2.7B',          provider: 'ollama', cmd: 'ollama pull phi',                     resistance: 15 },
+      { name: 'Orca Mini 3B',        provider: 'ollama', cmd: 'ollama pull orca-mini',               resistance: 18 },
     ],
-    attackRecommendation: 'L1–L2 attacks work reliably. Start here for proof-of-concept demos.',
-    expectedISR: '60–90%',
+    attackRecommendation: 'L1–L2 attacks work reliably (DAN, admin override, simple jailbreaks). Expect 70–95% ISR. Use this tier to verify your attack setup works before testing stronger models.',
+    expectedISR: '70–95%',
   },
   {
     tier: 'Tier 2',
     label: 'Medium Models',
-    sublabel: 'Realistic production targets',
+    sublabel: 'Standard safety training — moderate resistance',
     color: 'text-yellow-400',
     border: 'border-yellow-700/50',
     bg: 'bg-yellow-950/20',
     activeBg: 'bg-yellow-950/40',
     dotColor: 'bg-yellow-400',
     models: [
-      { name: 'LLaMA 3 8B',   provider: 'ollama',    cmd: 'ollama run llama3',    resistance: 40 },
-      { name: 'Mistral 7B',   provider: 'ollama',    cmd: 'ollama run mistral',   resistance: 38 },
-      { name: 'Gemma 7B',     provider: 'ollama',    cmd: 'ollama run gemma',     resistance: 42 },
-      { name: 'Falcon 7B',    provider: 'ollama',    cmd: 'ollama run falcon',    resistance: 35 },
+      { name: 'Mistral 7B Instruct', provider: 'ollama', cmd: 'ollama pull mistral',   resistance: 38 },
+      { name: 'LLaMA 3 8B Instruct', provider: 'ollama', cmd: 'ollama pull llama3',    resistance: 42 },
+      { name: 'Gemma 7B',            provider: 'ollama', cmd: 'ollama pull gemma:7b',  resistance: 40 },
+      { name: 'OpenChat 3.5',        provider: 'ollama', cmd: 'ollama pull openchat',  resistance: 35 },
+      { name: 'Zephyr 7B',           provider: 'ollama', cmd: 'ollama pull zephyr',    resistance: 42 },
     ],
-    attackRecommendation: 'L2–L3 attacks + evolution engine. Use multi-turn and RAG vectors.',
+    attackRecommendation: 'Use L2–L3 attacks + roleplay + encoding bypass + indirect injection. Multi-turn attacks are effective. Expected ISR: 25–55%.',
     expectedISR: '25–55%',
   },
   {
     tier: 'Tier 3',
     label: 'Strong Models',
-    sublabel: 'Hardened — advanced attacks required',
+    sublabel: 'RLHF-aligned commercial — requires advanced attacks',
     color: 'text-red-400',
     border: 'border-red-700/50',
     bg: 'bg-red-950/20',
     activeBg: 'bg-red-950/40',
     dotColor: 'bg-red-400',
     models: [
-      { name: 'GPT-4o',            provider: 'openai',    cmd: 'gpt-4o',                    resistance: 80 },
-      { name: 'GPT-4o Mini',       provider: 'openai',    cmd: 'gpt-4o-mini',               resistance: 72 },
-      { name: 'Claude Sonnet 4.6', provider: 'anthropic', cmd: 'claude-sonnet-4-6',         resistance: 82 },
-      { name: 'Claude Haiku 4.5',  provider: 'anthropic', cmd: 'claude-haiku-4-5-20251001', resistance: 75 },
+      { name: 'GPT-4o Mini',         provider: 'openai',    cmd: 'Needs OPENAI_API_KEY',               resistance: 72 },
+      { name: 'GPT-4o',              provider: 'openai',    cmd: 'Needs OPENAI_API_KEY',               resistance: 80 },
+      { name: 'Claude Sonnet 4.6',   provider: 'anthropic', cmd: 'Needs ANTHROPIC_API_KEY',            resistance: 82 },
+      { name: 'Claude Haiku 4.5',    provider: 'anthropic', cmd: 'Needs ANTHROPIC_API_KEY',            resistance: 75 },
     ],
-    attackRecommendation: 'L4–L5 + RL agent + system-level (RAG+API+multi-turn). Even top models break.',
-    expectedISR: '5–25%',
+    attackRecommendation: 'L4–L5 attacks + RAG poisoning + API abuse + multi-turn + cognitive. Even these models have weaknesses at L5. Expected ISR: 5–20%.',
+    expectedISR: '5–20%',
   },
 ]
 
@@ -153,6 +275,7 @@ export default function AttackLibrary() {
   const [selected, setSelected] = useState<AttackTemplate | null>(null)
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [filters, setFilters] = useState<AttackFilters>({ sort_by: 'risk_score', sort_dir: 'desc' })
   const [activeTier, setActiveTier] = useState<number | null>(null)
   const [leftTab, setLeftTab] = useState<'attacks' | 'models'>('attacks')
@@ -217,9 +340,15 @@ export default function AttackLibrary() {
       <div className="flex-1 flex flex-col p-6 gap-4 min-h-0">
         {/* Top action bar */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button onClick={seedStatic} className="btn-secondary flex items-center gap-2 text-sm">
               <Database size={14} /> Seed Library
+            </button>
+            <button
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs text-indigo-300 transition-colors hover:border-indigo-500/50"
+              style={{ borderColor: 'rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.08)' }}>
+              <BookOpen size={12} /> Guide
             </button>
             <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2 text-sm">
               <Plus size={14} /> Create Attack
@@ -295,14 +424,20 @@ export default function AttackLibrary() {
 
             {leftTab === 'models' && (
               <div className="flex-1 overflow-y-auto pr-1">
-                <div className="mb-3 p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Info size={11} className="text-brand-400" />
-                    <span className="text-[10px] font-bold text-brand-400 uppercase tracking-wide">Testing Strategy</span>
+                {/* Quick strategy guide */}
+                <div className="mb-3 space-y-1.5">
+                  <div className="p-3 rounded-xl border" style={{ background: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.2)' }}>
+                    <div className="text-[10px] font-bold text-emerald-400 mb-1">Step 1 — Start here</div>
+                    <p className="text-[10px] text-gray-400">Use a <strong className="text-emerald-300">Weak model</strong> (Dolphin-Mistral or TinyLlama) with L1–L2 attacks. You should see 70–95% attack success. This proves your setup works.</p>
                   </div>
-                  <p className="text-[10px] text-gray-500 leading-relaxed">
-                    Start with weak models to prove your attacks work. Progress to strong models using evolved + RL attacks. System-level (RAG+API) testing breaks even GPT-4o.
-                  </p>
+                  <div className="p-3 rounded-xl border" style={{ background: 'rgba(245,158,11,0.06)', borderColor: 'rgba(245,158,11,0.2)' }}>
+                    <div className="text-[10px] font-bold text-yellow-400 mb-1">Step 2 — Realistic testing</div>
+                    <p className="text-[10px] text-gray-400">Switch to a <strong className="text-yellow-300">Medium model</strong> (Mistral 7B) with L2–L3 + RAG attacks. Expect 25–55% ISR.</p>
+                  </div>
+                  <div className="p-3 rounded-xl border" style={{ background: 'rgba(232,0,61,0.06)', borderColor: 'rgba(232,0,61,0.2)' }}>
+                    <div className="text-[10px] font-bold text-red-400 mb-1">Step 3 — Enterprise targets</div>
+                    <p className="text-[10px] text-gray-400"><strong className="text-red-300">Strong models</strong> (GPT-4o, Claude) need L4–L5 + multi-turn + cognitive attacks. Even these have weaknesses.</p>
+                  </div>
                 </div>
                 <ModelTierPanel activeTier={activeTier} onSelect={setActiveTier} />
               </div>
@@ -326,6 +461,8 @@ export default function AttackLibrary() {
           onCreated={handleCreated}
         />
       )}
+
+      {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
     </div>
   )
 }

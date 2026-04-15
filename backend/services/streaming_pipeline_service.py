@@ -33,6 +33,7 @@ from backend.modules.learning_engine.store import store_evaluation_results, get_
 from backend.modules.context_detector.auto_context_detector import detect_context
 from backend.modules.gateway import registry
 from backend.modules.gateway.base_provider import LLMConfig
+from backend.modules.dataset_engine.seed_extractor import promote_successful_attack
 
 import structlog
 
@@ -121,6 +122,7 @@ async def stream_evaluation_pipeline(
         eval_results: List[EvaluationResult] = []
         current_level = min_level
         current_isr = 0.0
+        consecutive_failures = 0  # track consecutive safe responses for adaptive escalation
 
         for idx, attack in enumerate(attacks):
             # ── Attack Info ──
@@ -181,6 +183,27 @@ async def stream_evaluation_pipeline(
             })
             await asyncio.sleep(0)
 
+            # ── Adaptive per-attack escalation ───────────────────────────────
+            if isr_contribution > 0:
+                # Attack succeeded — reset failure counter
+                consecutive_failures = 0
+            else:
+                # Attack failed (model defended) — count up
+                consecutive_failures += 1
+                if consecutive_failures >= 2 and enable_escalation:
+                    # After 2 consecutive failures, escalate immediately
+                    new_level = min(current_level + 1, max_level)
+                    if new_level > current_level:
+                        current_level = new_level
+                        consecutive_failures = 0
+                        yield _sse("strategy_change", {
+                            "index": idx,
+                            "reason": f"Model defended {consecutive_failures+1} attacks — escalating to L{new_level}",
+                            "new_level": new_level,
+                            "action": "escalate",
+                        })
+                        await asyncio.sleep(0)
+
             # Store result
             er = EvaluationResult(
                 run_id=run.id,
@@ -220,7 +243,7 @@ async def stream_evaluation_pipeline(
                     "current_level": attack.level,
                 })
 
-            # ── Escalation check every 5 attacks ──
+            # ── Escalation check every 5 attacks (macro-level) ──
             if enable_escalation and (idx + 1) % 5 == 0 and idx < total - 1:
                 partial_metrics = compute_isr(result_dicts)
                 failed_cats = [
@@ -378,10 +401,31 @@ async def stream_evaluation_pipeline(
             "improvement_pct": round(improvement_pct, 2),
         })
 
-        # ── Stage 8: Learning ──────────────────────────────────────────────
-        yield _sse("stage_learning_start", {"message": "Storing insights in learning engine..."})
+        # ── Stage 8: Learning + Seed Promotion ────────────────────────────
+        yield _sse("stage_learning_start", {"message": "Storing insights and promoting high-value attacks..."})
         await store_evaluation_results(session, request.provider, request.model, result_dicts)
-        yield _sse("stage_learning_done", {"entries_stored": len(result_dicts)})
+
+        # Promote high-performing attacks into the seed library
+        seeds_promoted = 0
+        for rd in result_dicts:
+            if rd["classification"] in (Classification.unsafe, Classification.partial):
+                promoted = promote_successful_attack(
+                    attack_id=rd.get("attack_id", "unknown"),
+                    attack_name=rd.get("attack_name", "unknown"),
+                    category=rd.get("category", "unknown"),
+                    strategy=rd.get("attack_payload", "")[:50],  # use payload prefix as strategy hint
+                    prompt=rd.get("attack_payload", ""),
+                    severity=rd.get("severity", Classification.partial).value if hasattr(rd.get("severity"), "value") else str(rd.get("severity", "medium")),
+                    success_rate=rd.get("isr_contribution", 1.0),
+                    source=f"{request.provider}/{request.model}",
+                )
+                if promoted:
+                    seeds_promoted += 1
+
+        yield _sse("stage_learning_done", {
+            "entries_stored": len(result_dicts),
+            "seeds_promoted": seeds_promoted,
+        })
 
         # ── Finalize ───────────────────────────────────────────────────────
         run.status = RunStatus.completed

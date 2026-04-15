@@ -4,71 +4,105 @@
 
 @layer base {
   body {
-    @apply bg-gray-950 text-gray-100 font-sans;
-    background-image: radial-gradient(ellipse at 80% 0%, rgba(0,13,64,0.35) 0%, transparent 60%),
-                      radial-gradient(ellipse at 20% 100%, rgba(79,110,247,0.06) 0%, transparent 60%);
+    @apply text-gray-100 font-sans;
+    background-color: #0d1117;
+    background-image:
+      radial-gradient(ellipse at 75% 0%,   rgba(232, 0, 61, 0.07)  0%, transparent 55%),
+      radial-gradient(ellipse at 25% 100%, rgba(99, 102, 241, 0.07) 0%, transparent 55%);
     background-attachment: fixed;
+    min-height: 100vh;
   }
-  ::-webkit-scrollbar       { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #0d1117; }
-  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+  ::-webkit-scrollbar       { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
 }
 
 @layer components {
-  .card    { @apply bg-gray-900 border border-gray-800 rounded-xl p-6; }
-  .card-sm { @apply bg-gray-900 border border-gray-800 rounded-xl p-4; }
+  /* Cards */
+  .card    { @apply rounded-2xl p-6 border; background: rgba(255,255,255,0.025); border-color: rgba(255,255,255,0.07); }
+  .card-sm { @apply rounded-xl p-4 border;  background: rgba(255,255,255,0.02);  border-color: rgba(255,255,255,0.07); }
 
-  /* ── Buttons — no hover: variants in @apply (Tailwind v3 restriction) ── */
+  /* Buttons */
   .btn-primary {
-    @apply bg-brand-500 text-white px-4 py-2 rounded-lg font-medium
-           transition-all shadow-md
-           disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply px-4 py-2 rounded-xl font-semibold text-white transition-all shadow-md
+           disabled:opacity-40 disabled:cursor-not-allowed text-sm;
+    background: linear-gradient(135deg, #e8003d, #6366f1);
+    box-shadow: 0 0 16px rgba(232,0,61,0.2);
   }
-  .btn-primary:hover:not(:disabled) { background-color: #3b55e6; }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0 22px rgba(232,0,61,0.35);
+    transform: translateY(-1px);
+  }
 
   .btn-danger {
-    @apply text-white px-4 py-2 rounded-lg font-medium
-           transition-all shadow-md
+    @apply text-white px-4 py-2 rounded-xl font-semibold transition-all text-sm
            disabled:opacity-40 disabled:cursor-not-allowed;
     background-color: #e8003d;
   }
   .btn-danger:hover:not(:disabled) { background-color: #c8003a; }
 
   .btn-secondary {
-    @apply bg-gray-800 border border-gray-700 text-gray-200 px-4 py-2
-           rounded-lg font-medium transition-all;
+    @apply border text-gray-300 px-4 py-2 rounded-xl font-medium transition-all text-sm;
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.1);
   }
-  .btn-secondary:hover { @apply bg-gray-700 border-gray-600; }
+  .btn-secondary:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); }
 
-  /* Risk / severity badges */
-  .badge-critical { @apply bg-red-950 text-red-300 border border-red-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-high     { @apply bg-orange-950 text-orange-300 border border-orange-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-medium   { @apply bg-yellow-950 text-yellow-300 border border-yellow-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-low      { @apply bg-blue-950 text-blue-300 border border-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-safe     { @apply bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
-  .badge-unsafe   { @apply bg-red-950 text-red-300 border border-red-800 text-xs font-semibold px-2 py-0.5 rounded-full; }
+  /* Severity badges */
+  .badge-critical { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #fca5a5; background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.3); }
+  .badge-high     { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #fdba74; background: rgba(249,115,22,0.12); border-color: rgba(249,115,22,0.3); }
+  .badge-medium   { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #fde047; background: rgba(234,179,8,0.12);  border-color: rgba(234,179,8,0.3); }
+  .badge-low      { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #93c5fd; background: rgba(59,130,246,0.12);  border-color: rgba(59,130,246,0.3); }
+  .badge-safe     { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #6ee7b7; background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
+  .badge-unsafe   { @apply rounded-full text-xs font-bold px-2.5 py-0.5 border; color: #fca5a5; background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.3); }
 }
 
-/* ── Keyframe animations ── */
+/* ── Animations ────────────────────────────────────────────────────────── */
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
+  50%       { opacity: 0.45; }
 }
-.animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+.animate-pulse-slow { animation: pulse-slow 2.4s ease-in-out infinite; }
 
 @keyframes slide-in-right {
-  from { transform: translateX(20px); opacity: 0; }
+  from { transform: translateX(14px); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
-.animate-slide-in { animation: slide-in-right 0.2s ease-out forwards; }
+.animate-slide-in { animation: slide-in-right 0.18s ease-out forwards; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.25s ease-out forwards; }
 
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
 }
 .shimmer {
-  background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 1.8s infinite;
+}
+
+/* ── Glow utilities ────────────────────────────────────────────────────── */
+.glow-red    { box-shadow: 0 0 20px rgba(232,0,61,0.3); }
+.glow-indigo { box-shadow: 0 0 20px rgba(99,102,241,0.25); }
+.glow-green  { box-shadow: 0 0 20px rgba(34,197,94,0.2); }
+
+/* ── Line clamp ────────────────────────────────────────────────────────── */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Focus ring ────────────────────────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(232,0,61,0.3);
 }

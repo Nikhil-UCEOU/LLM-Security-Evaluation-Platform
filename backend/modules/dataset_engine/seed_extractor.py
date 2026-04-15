@@ -47,7 +47,8 @@ def deduplicate(attacks: List[NormalizedAttack]) -> List[NormalizedAttack]:
 def _score_attack(attack: NormalizedAttack) -> float:
     """
     Score an attack for seed quality (0-1).
-    Factors: length, strategy diversity, severity, tag richness.
+    Factors: length, strategy diversity, severity, tag richness,
+             weak_model_target bonus.
     """
     score = 0.0
 
@@ -55,7 +56,7 @@ def _score_attack(attack: NormalizedAttack) -> float:
     prompt_len = len(attack.prompt)
     if 50 <= prompt_len <= 500:
         score += 0.30
-    elif 30 <= prompt_len < 50 or 500 < prompt_len <= 800:
+    elif 20 <= prompt_len < 50 or 500 < prompt_len <= 800:
         score += 0.15
 
     # Strategy specified
@@ -68,6 +69,10 @@ def _score_attack(attack: NormalizedAttack) -> float:
 
     # Tag richness
     score += min(len(attack.tags) * 0.05, 0.15)
+
+    # Bonus for attacks specifically designed to produce detectable outputs
+    if "weak_model_target" in (attack.tags or []):
+        score += 0.20
 
     return round(min(score, 1.0), 3)
 
@@ -116,8 +121,8 @@ def _select_diverse(
 
 def extract_seeds(
     categories: Optional[List[str]] = None,
-    target_n: int = 75,
-    min_quality: float = 0.3,
+    target_n: int = 100,
+    min_quality: float = 0.2,
 ) -> List[Dict[str, Any]]:
     """
     Full pipeline: load → deduplicate → quality filter → cluster → select diverse seeds.
@@ -169,7 +174,7 @@ def load_seeds() -> List[Dict[str, Any]]:
 
 def run_seed_pipeline(
     categories: Optional[List[str]] = None,
-    target_n: int = 75,
+    target_n: int = 100,
     force_refresh: bool = False,
 ) -> List[Dict[str, Any]]:
     """
@@ -181,3 +186,61 @@ def run_seed_pipeline(
     seeds = extract_seeds(categories=categories, target_n=target_n)
     save_seeds(seeds)
     return seeds
+
+
+def promote_successful_attack(
+    attack_id: str,
+    attack_name: str,
+    category: str,
+    strategy: str,
+    prompt: str,
+    severity: str,
+    success_rate: float,
+    source: str = "evaluation",
+) -> bool:
+    """
+    Promote a high-performing attack from an evaluation into the seed library.
+
+    Rules:
+    - Attack must have success_rate >= 0.5
+    - Prompt must not already exist in seeds (dedup check)
+    - Seeds are bounded at MAX_SEEDS; lowest-quality seed is evicted if full
+
+    Returns True if the seed was added, False if skipped.
+    """
+    MAX_SEEDS = 100
+    MIN_SUCCESS_RATE = 0.5
+
+    if success_rate < MIN_SUCCESS_RATE:
+        return False
+
+    seeds = load_seeds()
+
+    # Dedup check — skip if same prompt hash already in seeds
+    new_hash = _prompt_hash(prompt)
+    for s in seeds:
+        if _prompt_hash(s.get("prompt", "")) == new_hash:
+            return False  # Already present
+
+    new_seed: Dict[str, Any] = {
+        "id": f"seed_promoted_{attack_id}",
+        "prompt": prompt,
+        "category": category,
+        "strategy": strategy,
+        "severity": severity,
+        "source": source,
+        "tags": [category, strategy, "promoted"],
+        "metadata": {},
+        "quality_score": round(min(0.4 + success_rate * 0.6, 1.0), 3),
+        "success_rate": round(success_rate, 3),
+        "promoted_at": __import__("datetime").datetime.utcnow().isoformat(),
+    }
+
+    if len(seeds) >= MAX_SEEDS:
+        # Evict lowest quality_score seed
+        seeds.sort(key=lambda s: s.get("quality_score", 0))
+        seeds.pop(0)
+
+    seeds.append(new_seed)
+    save_seeds(seeds)
+    return True
