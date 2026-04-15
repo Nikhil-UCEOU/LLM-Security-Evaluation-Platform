@@ -6,7 +6,8 @@ import {
   Play, Square, Loader, Shield, Zap, Target, ChevronDown, ChevronRight,
   AlertTriangle, CheckCircle, XCircle, Clock, Activity, Wrench,
   TrendingUp, Brain, Lock, Cpu, ArrowRight, Info, Flame,
-  RefreshCw, ChevronUp,
+  RefreshCw, ChevronUp, BarChart2, AlertOctagon, BookOpen,
+  Search, Bug, FileText, Eye,
 } from 'lucide-react'
 
 // ── Model Tier Definitions ────────────────────────────────────────────────
@@ -26,35 +27,46 @@ const MODEL_TIERS: Record<TierKey, {
 }> = {
   weak: {
     label: 'Weak',
-    subtitle: 'Uncensored & unguarded — attacks WILL succeed',
+    subtitle: 'Uncensored & unguarded — attacks WILL succeed (70–95% ISR)',
     color: '#22c55e', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.3)',
     icon: Target,
     badge: '70–95% ISR',
-    expectedISR: '70–95% attack success — ideal for demo',
+    expectedISR: '70–95% attack success — ideal for demonstrating attack engine',
     models: [
-      // Explicitly uncensored fine-tunes — no safety training
-      { id: 'dolphin-mistral', provider: 'ollama', label: 'Dolphin Mistral 7B (uncensored)', note: 'ollama pull dolphin-mistral' },
+      // ── TOP PICKS: Explicitly uncensored — highest attack success rate ──
+      { id: 'dolphin-mistral', provider: 'ollama', label: '⭐ Dolphin Mistral 7B (uncensored) — BEST', note: 'ollama pull dolphin-mistral' },
+      { id: 'dolphin-llama3', provider: 'ollama', label: '⭐ Dolphin LLaMA 3 8B (uncensored)', note: 'ollama pull dolphin-llama3' },
+      { id: 'wizard-vicuna-uncensored', provider: 'ollama', label: '⭐ Wizard Vicuna Uncensored 7B', note: 'ollama pull wizard-vicuna-uncensored' },
+      { id: 'llama2-uncensored', provider: 'ollama', label: '⭐ LLaMA 2 Uncensored 7B', note: 'ollama pull llama2-uncensored' },
       { id: 'dolphin-phi', provider: 'ollama', label: 'Dolphin Phi 2.7B (uncensored)', note: 'ollama pull dolphin-phi' },
-      { id: 'wizard-vicuna-uncensored', provider: 'ollama', label: 'Wizard Vicuna Uncensored 7B', note: 'ollama pull wizard-vicuna-uncensored' },
-      { id: 'llama2-uncensored', provider: 'ollama', label: 'LLaMA 2 Uncensored 7B', note: 'ollama pull llama2-uncensored' },
-      { id: 'dolphin-llama3', provider: 'ollama', label: 'Dolphin LLaMA 3 8B (uncensored)', note: 'ollama pull dolphin-llama3' },
-      // Tiny models with minimal safety
-      { id: 'tinyllama', provider: 'ollama', label: 'TinyLlama 1.1B', note: 'ollama pull tinyllama' },
-      { id: 'orca-mini', provider: 'ollama', label: 'Orca Mini 3B', note: 'ollama pull orca-mini' },
-      { id: 'phi', provider: 'ollama', label: 'Phi-2 2.7B', note: 'ollama pull phi' },
-      { id: 'stablelm2', provider: 'ollama', label: 'StableLM 2 1.6B', note: 'ollama pull stablelm2' },
-      { id: 'qwen:0.5b', provider: 'ollama', label: 'Qwen 0.5B', note: 'ollama pull qwen:0.5b' },
+      { id: 'nous-hermes:13b', provider: 'ollama', label: 'Nous Hermes 13B (minimal safety)', note: 'ollama pull nous-hermes:13b' },
+      { id: 'nous-hermes2', provider: 'ollama', label: 'Nous Hermes 2 7B', note: 'ollama pull nous-hermes2' },
+      { id: 'samantha-mistral', provider: 'ollama', label: 'Samantha Mistral 7B (uncensored)', note: 'ollama pull samantha-mistral' },
+      { id: 'orca-mini', provider: 'ollama', label: 'Orca Mini 3B (no safety)', note: 'ollama pull orca-mini' },
+      // ── ULTRA WEAK: Tiny models with near-zero safety ──
+      { id: 'tinyllama', provider: 'ollama', label: 'TinyLlama 1.1B (ultra weak)', note: 'ollama pull tinyllama' },
+      { id: 'qwen:0.5b', provider: 'ollama', label: 'Qwen 0.5B (ultra tiny)', note: 'ollama pull qwen:0.5b' },
+      { id: 'stablelm2:1.6b', provider: 'ollama', label: 'StableLM 2 1.6B (no safety)', note: 'ollama pull stablelm2:1.6b' },
+      { id: 'phi:2.7b', provider: 'ollama', label: 'Phi-2 2.7B (minimal safety)', note: 'ollama pull phi:2.7b' },
+      { id: 'smollm:135m', provider: 'ollama', label: 'SmolLM 135M (near-zero safety)', note: 'ollama pull smollm:135m' },
+      // ── HuggingFace Hub: Student/research models with zero safety ──
+      { id: 'EleutherAI/gpt-neo-125M', provider: 'huggingface', label: 'GPT-Neo 125M (no safety — HF free)', note: 'No API key needed' },
+      { id: 'EleutherAI/gpt-neo-1.3B', provider: 'huggingface', label: 'GPT-Neo 1.3B (no safety — HF free)', note: 'No API key needed' },
+      { id: 'facebook/opt-125m', provider: 'huggingface', label: 'OPT-125M (no safety — HF free)', note: 'No API key needed' },
+      { id: 'facebook/opt-350m', provider: 'huggingface', label: 'OPT-350M (no safety — HF free)', note: 'No API key needed' },
+      { id: 'bigscience/bloom-560m', provider: 'huggingface', label: 'BLOOM-560M (no safety — HF free)', note: 'No API key needed' },
     ],
   },
   medium: {
     label: 'Medium',
-    subtitle: 'Standard safety training — partial resistance',
+    subtitle: 'Standard safety training — partial resistance (25–55% ISR)',
     color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)',
     icon: Brain,
     badge: '25–55% ISR',
     expectedISR: '25–55% attack success — realistic production targets',
     models: [
       { id: 'mistral', provider: 'ollama', label: 'Mistral 7B Instruct', note: 'ollama pull mistral' },
+      { id: 'mistral-openorca', provider: 'ollama', label: 'Mistral OpenOrca 7B (semi-weak)', note: 'ollama pull mistral-openorca' },
       { id: 'llama3', provider: 'ollama', label: 'LLaMA 3 8B Instruct', note: 'ollama pull llama3' },
       { id: 'gemma:7b', provider: 'ollama', label: 'Gemma 7B Instruct', note: 'ollama pull gemma:7b' },
       { id: 'gemma:2b', provider: 'ollama', label: 'Gemma 2B Instruct', note: 'ollama pull gemma:2b' },
@@ -64,6 +76,7 @@ const MODEL_TIERS: Record<TierKey, {
       { id: 'vicuna', provider: 'ollama', label: 'Vicuna 7B', note: 'ollama pull vicuna' },
       { id: 'falcon', provider: 'ollama', label: 'Falcon 7B', note: 'ollama pull falcon' },
       { id: 'starling-lm', provider: 'ollama', label: 'Starling LM 7B', note: 'ollama pull starling-lm' },
+      { id: 'wizard-math', provider: 'ollama', label: 'Wizard Math 7B (minimal safety)', note: 'ollama pull wizard-math' },
     ],
   },
   strong: {
@@ -319,6 +332,10 @@ export default function EvaluationRun() {
   const [finalSummary, setFinalSummary] = useState<any>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [consecutiveFails, setConsecutiveFails] = useState(0)
+  const [analysis, setAnalysis] = useState<any>(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
+  const [attackResultsForAnalysis, setAttackResultsForAnalysis] = useState<any[]>([])
 
   const abortRef = useRef<AbortController | null>(null)
   const streamRef = useRef<HTMLDivElement>(null)
@@ -354,6 +371,47 @@ export default function EvaluationRun() {
     addLog('⛔ Evaluation stopped')
   }
 
+  const fetchAnalysis = useCallback(async (runIdArg: number | null, attacksArg: any[], isr: number) => {
+    setAnalysisLoading(true)
+    try {
+      const apiKey = (import.meta as any).env?.VITE_API_KEY || 'cortexflow-dev-key'
+      let data: any = null
+
+      // Try DB-based analysis first if we have a run ID
+      if (runIdArg) {
+        try {
+          const res = await fetch(`/api/v1/evaluations/${runIdArg}/analysis`, {
+            headers: { 'X-API-Key': apiKey }
+          })
+          if (res.ok) data = await res.json()
+        } catch {}
+      }
+
+      // Fallback: direct analysis from attack results
+      if (!data && attacksArg.length > 0) {
+        const res = await fetch('/api/v1/evaluations/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+          body: JSON.stringify({
+            attack_results: attacksArg,
+            global_isr: isr,
+            run_id: runIdArg ? String(runIdArg) : 'direct',
+          })
+        })
+        if (res.ok) data = await res.json()
+      }
+
+      if (data) {
+        setAnalysis(data)
+        setShowAnalysis(true)
+      }
+    } catch (err) {
+      console.error('Analysis fetch failed:', err)
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }, [])
+
   const handleStart = async () => {
     const { provider, model } = getProviderAndModel()
     setRunning(true)
@@ -362,6 +420,9 @@ export default function EvaluationRun() {
     setLogs([])
     setFinalSummary(null)
     setRunId(null)
+    setAnalysis(null)
+    setShowAnalysis(false)
+    setAttackResultsForAnalysis([])
     setStage('detecting')
     setConsecutiveFails(0)
     setMetrics({ attacks_done: 0, total: 0, current_isr: 0, successful_attacks: 0 })
@@ -469,6 +530,19 @@ export default function EvaluationRun() {
           }
           return next
         })
+        // Collect for analysis
+        setAttackResultsForAnalysis(prev => [
+          ...prev,
+          {
+            classification: e.classification || 'safe',
+            severity: e.severity || 'none',
+            category: e.category || 'unknown',
+            strategy: e.strategy || 'unknown',
+            owasp_risk: e.owasp_risk || 'LLM01',
+            signals: e.signals || [],
+            attack_name: e.name || `Attack ${e.index}`,
+          }
+        ])
         if (e.success) {
           setConsecutiveFails(0)
           addLog(`⚠ Vulnerability found: ${e.classification} (${e.severity})`)
@@ -524,6 +598,17 @@ export default function EvaluationRun() {
         setStage('done')
         setFinalSummary(e)
         addLog(`Complete — ISR: ${Math.round((e.global_isr || e.final_isr || 0) * 100)}%`)
+        // Auto-fetch analysis after completion
+        setTimeout(() => {
+          setRunId(rid => {
+            setAttackResultsForAnalysis(prevResults => {
+              const finalIsr = e.global_isr || e.final_isr || 0
+              fetchAnalysis(rid, prevResults, finalIsr)
+              return prevResults
+            })
+            return rid
+          })
+        }, 500)
         break
       case 'strategy_change':
         addLog(`Escalating strategy → L${e.new_level}: ${e.reason || 'adapting to defenses'}`)
@@ -852,48 +937,228 @@ export default function EvaluationRun() {
 
                 {/* Final summary */}
                 {finalSummary && (
-                  <div className="mt-6 rounded-2xl p-5 border"
-                    style={{ background: 'rgba(232,0,61,0.05)', borderColor: 'rgba(232,0,61,0.2)' }}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                        style={{ background: 'rgba(232,0,61,0.15)' }}>
-                        <Shield size={16} style={{ color: '#e8003d' }} />
+                  <div className="mt-6 space-y-4">
+                    {/* Score card */}
+                    <div className="rounded-2xl p-5 border"
+                      style={{ background: 'rgba(232,0,61,0.05)', borderColor: 'rgba(232,0,61,0.2)' }}>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                          style={{ background: 'rgba(232,0,61,0.15)' }}>
+                          <Shield size={16} style={{ color: '#e8003d' }} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-white">Evaluation Complete</div>
+                          <div className="text-xs text-gray-500">
+                            {successCount} vulnerabilities found out of {doneCount} tests
+                          </div>
+                        </div>
+                        {analysis?.vulnerability_profile && (
+                          <div className="ml-auto">
+                            <span className="text-xs font-bold px-3 py-1 rounded-full"
+                              style={{
+                                background: `${analysis.vulnerability_profile.color}20`,
+                                color: analysis.vulnerability_profile.color,
+                                border: `1px solid ${analysis.vulnerability_profile.color}40`,
+                              }}>
+                              {analysis.vulnerability_profile.profile}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <div className="text-sm font-bold text-white">Evaluation Complete</div>
-                        <div className="text-xs text-gray-500">
-                          {successCount} vulnerabilities found out of {doneCount} tests
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
+                          <div className="text-xl font-bold text-white">{Math.round(metrics.current_isr * 100)}%</div>
+                          <div className="text-[10px] text-gray-500">Attack Success</div>
+                        </div>
+                        <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
+                          <div className={`text-xl font-bold ${successCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{successCount}</div>
+                          <div className="text-[10px] text-gray-500">Vulnerabilities</div>
+                        </div>
+                        <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
+                          <div className="text-xl font-bold text-white">{doneCount}</div>
+                          <div className="text-[10px] text-gray-500">Tests Run</div>
                         </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
-                        <div className="text-xl font-bold text-white">{Math.round(metrics.current_isr * 100)}%</div>
-                        <div className="text-[10px] text-gray-500">Success Rate</div>
-                      </div>
-                      <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
-                        <div className={`text-xl font-bold ${successCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{successCount}</div>
-                        <div className="text-[10px] text-gray-500">Vulnerabilities</div>
-                      </div>
-                      <div className="bg-white/03 rounded-xl p-3 text-center border border-white/06">
-                        <div className="text-xl font-bold text-white">{doneCount}</div>
-                        <div className="text-[10px] text-gray-500">Tests Run</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => navigate(`/results/${runId}`)}
-                        className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
-                        style={{ background: 'rgba(232,0,61,0.2)', border: '1px solid rgba(232,0,61,0.4)' }}>
-                        <TrendingUp size={12} /> View Full Report
-                      </button>
-                      {successCount > 0 && (
-                        <button onClick={() => navigate(`/mitigation${runId ? `?runId=${runId}` : ''}`)}
+                      <div className="flex gap-2">
+                        <button onClick={() => navigate(`/results/${runId}`)}
                           className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
-                          style={{ background: 'linear-gradient(135deg, #e8003d, #6366f1)', boxShadow: '0 0 12px rgba(232,0,61,0.2)' }}>
-                          <Wrench size={12} /> Fix Vulnerabilities
+                          style={{ background: 'rgba(232,0,61,0.2)', border: '1px solid rgba(232,0,61,0.4)' }}>
+                          <TrendingUp size={12} /> View Full Report
                         </button>
-                      )}
+                        {successCount > 0 && (
+                          <button onClick={() => navigate(`/mitigation${runId ? `?runId=${runId}` : ''}`)}
+                            className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
+                            style={{ background: 'linear-gradient(135deg, #e8003d, #6366f1)', boxShadow: '0 0 12px rgba(232,0,61,0.2)' }}>
+                            <Wrench size={12} /> Fix Vulnerabilities
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Analysis loading */}
+                    {analysisLoading && (
+                      <div className="rounded-2xl p-4 border border-indigo-800/30 bg-indigo-950/20 flex items-center gap-3">
+                        <Loader size={14} className="animate-spin text-indigo-400" />
+                        <span className="text-xs text-indigo-300">Analyzing failure patterns...</span>
+                      </div>
+                    )}
+
+                    {/* Analysis Panel */}
+                    {analysis && showAnalysis && (
+                      <div className="rounded-2xl border overflow-hidden"
+                        style={{ borderColor: 'rgba(99,102,241,0.25)', background: 'rgba(99,102,241,0.04)' }}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-3"
+                          style={{ borderBottom: '1px solid rgba(99,102,241,0.15)', background: 'rgba(99,102,241,0.08)' }}>
+                          <div className="flex items-center gap-2">
+                            <BarChart2 size={14} className="text-indigo-400" />
+                            <span className="text-sm font-bold text-white">Failure Analysis</span>
+                            <span className="text-[10px] text-indigo-400 bg-indigo-900/40 px-2 py-0.5 rounded-full">
+                              Why did attacks succeed?
+                            </span>
+                          </div>
+                          <button onClick={() => setShowAnalysis(false)} className="text-gray-600 hover:text-gray-400">
+                            <ChevronUp size={14} />
+                          </button>
+                        </div>
+
+                        <div className="p-5 space-y-4">
+                          {/* Key findings */}
+                          {analysis.key_findings?.length > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Search size={11} /> Key Findings
+                              </div>
+                              <div className="space-y-1.5">
+                                {analysis.key_findings.slice(0, 4).map((f: string, i: number) => (
+                                  <div key={i} className="flex items-start gap-2 text-xs text-gray-300 bg-white/03 rounded-lg px-3 py-2 border border-white/06">
+                                    <AlertOctagon size={10} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                                    {f}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Failure factors */}
+                          {analysis.failure_factors?.length > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Bug size={11} /> Attack Factors ({analysis.failure_factors.length} detected)
+                              </div>
+                              <div className="space-y-2">
+                                {analysis.failure_factors.slice(0, 5).map((f: any, i: number) => {
+                                  const sevColor: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' }
+                                  const c = sevColor[f.severity] || '#6b7280'
+                                  return (
+                                    <div key={i} className="rounded-lg border p-3" style={{ borderColor: `${c}30`, background: `${c}08` }}>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-semibold" style={{ color: c }}>{f.label}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] text-gray-500">{f.owasp}</span>
+                                          <span className="text-[10px] font-bold" style={{ color: c }}>
+                                            {Math.round(f.success_rate * 100)}% success
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="text-[11px] text-gray-400 mb-1">{f.description}</div>
+                                      <div className="text-[10px] text-gray-500">
+                                        <span className="text-indigo-400">Cause:</span> {f.cause}
+                                      </div>
+                                      <div className="mt-1.5 flex items-center justify-between">
+                                        <div className="text-[10px] text-gray-500">
+                                          <span className="text-green-400">Fix:</span> {f.mitigation}
+                                        </div>
+                                        <button
+                                          onClick={() => navigate(`/mitigation${runId ? `?runId=${runId}` : ''}`)}
+                                          className="text-[10px] font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
+                                          style={{ background: 'rgba(232,0,61,0.15)', color: '#f87171', border: '1px solid rgba(232,0,61,0.3)' }}>
+                                          <Wrench size={8} /> Apply Fix
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Model weaknesses */}
+                          {analysis.model_weaknesses?.length > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Eye size={11} /> Model Weaknesses
+                              </div>
+                              <div className="space-y-1.5">
+                                {analysis.model_weaknesses.map((w: string, i: number) => (
+                                  <div key={i} className="flex items-start gap-2 text-xs text-red-300/80 bg-red-950/20 rounded-lg px-3 py-2 border border-red-900/30">
+                                    <XCircle size={10} className="text-red-400 mt-0.5 flex-shrink-0" />
+                                    {w}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Category breakdown */}
+                          {analysis.category_breakdown && Object.keys(analysis.category_breakdown).length > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <FileText size={11} /> Attack Category Results
+                              </div>
+                              <div className="space-y-1.5">
+                                {Object.entries(analysis.category_breakdown as Record<string, any>)
+                                  .sort((a, b) => b[1].isr - a[1].isr)
+                                  .slice(0, 6)
+                                  .map(([cat, stats]) => {
+                                    const isr = stats.isr || 0
+                                    const barColor = isr >= 0.6 ? '#ef4444' : isr >= 0.35 ? '#f97316' : isr >= 0.1 ? '#eab308' : '#22c55e'
+                                    return (
+                                      <div key={cat} className="flex items-center gap-3 text-[11px]">
+                                        <div className="w-28 text-gray-400 truncate capitalize">
+                                          {cat.replace(/_/g, ' ')}
+                                        </div>
+                                        <div className="flex-1 h-1.5 bg-white/06 rounded-full overflow-hidden">
+                                          <div className="h-full rounded-full transition-all"
+                                            style={{ width: `${Math.round(isr * 100)}%`, background: barColor }} />
+                                        </div>
+                                        <div className="w-10 text-right font-mono font-bold" style={{ color: barColor }}>
+                                          {Math.round(isr * 100)}%
+                                        </div>
+                                        <div className="text-gray-600 w-12 text-right">
+                                          {stats.successful}/{stats.total}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* One-click global mitigation */}
+                          {successCount > 0 && (
+                            <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                              <button
+                                onClick={() => navigate(`/mitigation${runId ? `?runId=${runId}` : ''}`)}
+                                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all"
+                                style={{ background: 'linear-gradient(135deg, #e8003d, #6366f1)', boxShadow: '0 0 20px rgba(232,0,61,0.25)' }}>
+                                <Wrench size={14} />
+                                Apply All Mitigations — Fix {successCount} Vulnerabilities
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show Analysis toggle if hidden */}
+                    {analysis && !showAnalysis && (
+                      <button
+                        onClick={() => setShowAnalysis(true)}
+                        className="w-full py-2.5 rounded-xl text-xs font-semibold text-indigo-300 border border-indigo-800/30 flex items-center justify-center gap-2 hover:bg-indigo-950/30 transition-all">
+                        <BarChart2 size={12} /> Show Failure Analysis
+                      </button>
+                    )}
                   </div>
                 )}
               </>

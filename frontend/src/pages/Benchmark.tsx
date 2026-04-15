@@ -28,12 +28,21 @@ const PROVIDERS: Array<{
       {
         tier: 'weak',
         label: '🟢 Weak — Uncensored/Tiny (70–95% ISR expected)',
-        models: ['dolphin-mistral', 'dolphin-llama3', 'wizard-vicuna-uncensored', 'llama2-uncensored', 'dolphin-phi', 'tinyllama', 'orca-mini', 'phi', 'stablelm2', 'qwen:0.5b'],
+        models: [
+          'dolphin-mistral', 'dolphin-llama3', 'wizard-vicuna-uncensored',
+          'llama2-uncensored', 'dolphin-phi', 'nous-hermes:13b', 'nous-hermes2',
+          'samantha-mistral', 'tinyllama', 'orca-mini', 'phi:2.7b',
+          'stablelm2:1.6b', 'qwen:0.5b', 'smollm:135m', 'smollm:360m',
+        ],
       },
       {
         tier: 'medium',
         label: '🟡 Medium — Standard Safety (25–55% ISR expected)',
-        models: ['mistral', 'llama3', 'gemma:7b', 'gemma:2b', 'neural-chat', 'openchat', 'zephyr', 'vicuna', 'falcon', 'starling-lm'],
+        models: [
+          'mistral', 'mistral-openorca', 'llama3', 'gemma:7b', 'gemma:2b',
+          'neural-chat', 'openchat', 'zephyr', 'vicuna', 'falcon',
+          'starling-lm', 'wizard-math',
+        ],
       },
       {
         tier: 'strong',
@@ -63,6 +72,26 @@ const PROVIDERS: Array<{
         tier: 'strong',
         label: '🔴 Strong — Constitutional AI (3–10% ISR expected)',
         models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'],
+      },
+    ],
+  },
+  {
+    id: 'huggingface',
+    label: 'HuggingFace Hub (Free — No Safety)',
+    note: 'Free tier available. Set HF_API_KEY for higher limits',
+    groups: [
+      {
+        tier: 'weak',
+        label: '🟢 Ultra Weak — Zero safety training (90–100% ISR expected)',
+        models: [
+          'EleutherAI/gpt-neo-125M',
+          'EleutherAI/gpt-neo-1.3B',
+          'facebook/opt-125m',
+          'facebook/opt-350m',
+          'facebook/opt-1.3b',
+          'bigscience/bloom-560m',
+          'tiiuae/falcon-7b',
+        ],
       },
     ],
   },
@@ -326,6 +355,8 @@ function ComparisonChart({ results }: { results: BenchmarkResult[] }) {
 
 export default function Benchmark() {
   const [datasets, setDatasets] = useState<DatasetInfo[]>([])
+  const [datasetsLoading, setDatasetsLoading] = useState(true)
+  const [datasetsError, setDatasetsError] = useState(false)
   const [history, setHistory] = useState<BenchmarkResult[]>([])
   const [selectedDataset, setSelectedDataset] = useState('')
   const [provider, setProvider] = useState('ollama')
@@ -345,8 +376,22 @@ export default function Benchmark() {
   const selectedProvider = PROVIDERS.find(p => p.id === provider)
   const availableModels = selectedProvider?.groups.flatMap(g => g.models) ?? []
 
+  const loadDatasets = async () => {
+    setDatasetsLoading(true)
+    setDatasetsError(false)
+    try {
+      const data = await benchmarkApi.datasets()
+      setDatasets(data)
+    } catch {
+      setDatasetsError(true)
+      setDatasets([])
+    } finally {
+      setDatasetsLoading(false)
+    }
+  }
+
   useEffect(() => {
-    benchmarkApi.datasets().then(setDatasets).catch(() => {})
+    loadDatasets()
     loadHistory()
   }, [])
 
@@ -423,9 +468,24 @@ export default function Benchmark() {
               )}
 
               <div className="space-y-1.5">
-                {datasets.length === 0 ? (
+                {datasetsLoading ? (
                   <div className="text-xs text-gray-600 py-3 text-center">
-                    <Loader size={12} className="animate-spin mx-auto mb-1" />Loading...
+                    <Loader size={12} className="animate-spin mx-auto mb-1" />
+                    <div>Loading datasets...</div>
+                  </div>
+                ) : datasetsError ? (
+                  <div className="text-xs text-gray-600 py-3 text-center space-y-2">
+                    <div className="text-orange-400">Could not load datasets</div>
+                    <div className="text-gray-600 text-[10px]">Upload a dataset to get started</div>
+                    <button onClick={loadDatasets} className="text-[10px] px-2 py-1 rounded border text-gray-400 border-gray-700 hover:border-gray-500">
+                      Retry
+                    </button>
+                  </div>
+                ) : datasets.length === 0 ? (
+                  <div className="text-xs text-gray-600 py-3 text-center space-y-2">
+                    <FolderOpen size={18} className="mx-auto text-gray-700" />
+                    <div>No datasets found</div>
+                    <div className="text-[10px] text-gray-700">Upload a dataset file above</div>
                   </div>
                 ) : datasets.map(ds => (
                   <div key={ds.name}>

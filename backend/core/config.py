@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     google_api_key: str = ""
     cohere_api_key: str = ""
+    huggingface_api_key: str = ""   # Optional — free tier works without key
     ollama_base_url: str = "http://localhost:11434"
 
     # Default LLM

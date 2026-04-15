@@ -2,6 +2,9 @@
 CortexFlow Streaming Pipeline Service
 Wraps the evaluation pipeline with real-time SSE event emission.
 Each stage yields JSON events that the frontend consumes.
+
+DB writes use short-lived sessions (open → write → commit → close) so SQLite
+never holds a write lock across multiple await points.
 """
 from __future__ import annotations
 
@@ -9,8 +12,6 @@ import json
 import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, List, Optional, Dict, Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.schemas.evaluation import EvaluationRunRequest
 from backend.models.evaluation import (
@@ -23,7 +24,7 @@ from backend.models.attack import AttackCategory
 from backend.modules.attack_engine.runner import build_attack_list
 from backend.modules.attack_engine.base_attack import AttackPayload
 from backend.modules.attack_engine.escalation_controller import decide_escalation
-from backend.modules.evaluation_engine.classifier import classify_response, score_severity
+from backend.modules.evaluation_engine.classifier import classify_response, classify_response_with_confidence, score_severity
 from backend.modules.evaluation_engine.isr_calculator import compute_isr
 from backend.modules.rca_engine.analyzer import analyze as rca_analyze
 from backend.modules.mitigation_engine.prompt_hardener import harden_prompt, generate_guardrails
@@ -46,9 +47,24 @@ def _sse(event_type: str, data: Dict[str, Any]) -> str:
     return f"data: {payload}\n\n"
 
 
+async def _db_write(fn):
+    """Execute a DB write in its own short-lived session (open→write→commit→close)."""
+    from backend.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        result = await fn(session)
+        await session.commit()
+        return result
+
+
+async def _db_read(fn):
+    """Execute a DB read in its own short-lived session."""
+    from backend.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        return await fn(session)
+
+
 async def stream_evaluation_pipeline(
     request: EvaluationRunRequest,
-    session: AsyncSession,
     document_content: str = "",
     api_schema: str = "",
     enable_mutation: bool = False,
@@ -58,6 +74,7 @@ async def stream_evaluation_pipeline(
 ) -> AsyncGenerator[str, None]:
     """
     Async generator that streams the evaluation pipeline as SSE events.
+    Each DB write uses its own session so SQLite is never locked long-term.
     """
 
     # ── Stage 0: Context Detection ─────────────────────────────────────────
@@ -75,19 +92,28 @@ async def stream_evaluation_pipeline(
         "recommended_categories": ctx.recommended_categories,
     })
 
-    # ── Stage 1: Create run record ─────────────────────────────────────────
-    run = EvaluationRun(
-        provider=request.provider,
-        model=request.model,
-        system_prompt=request.system_prompt,
-        status=RunStatus.running,
-        started_at=datetime.utcnow(),
-    )
-    session.add(run)
-    await session.flush()
+    # ── Stage 1: Create run record (own session, committed immediately) ────
+    run_id: int = 0
+    try:
+        async def _create_run(session):
+            run = EvaluationRun(
+                provider=request.provider,
+                model=request.model,
+                system_prompt=request.system_prompt,
+                status=RunStatus.running,
+                started_at=datetime.utcnow(),
+            )
+            session.add(run)
+            await session.flush()
+            return run.id
+
+        run_id = await _db_write(_create_run)
+    except Exception as exc:
+        yield _sse("error", {"message": f"Failed to create run record: {exc}"})
+        return
 
     yield _sse("pipeline_start", {
-        "run_id": run.id,
+        "run_id": run_id,
         "provider": request.provider,
         "model": request.model,
         "timestamp": datetime.utcnow().isoformat(),
@@ -96,7 +122,9 @@ async def stream_evaluation_pipeline(
     try:
         # ── Stage 2: Build attack list ─────────────────────────────────────
         categories = request.attack_categories or list(AttackCategory)
-        historical = await get_top_attacks(session, request.provider, request.model, limit=20)
+        historical = await _db_read(
+            lambda s: get_top_attacks(s, request.provider, request.model, limit=20)
+        )
 
         attacks = build_attack_list(
             categories=categories,
@@ -119,13 +147,12 @@ async def stream_evaluation_pipeline(
         # ── Stage 3: Execute attacks one by one (streaming) ────────────────
         config = LLMConfig(model=request.model, system_prompt=request.system_prompt)
         result_dicts: List[Dict] = []
-        eval_results: List[EvaluationResult] = []
+        eval_result_rows: List[Dict] = []  # data for bulk DB write later
         current_level = min_level
         current_isr = 0.0
-        consecutive_failures = 0  # track consecutive safe responses for adaptive escalation
+        consecutive_failures = 0
 
         for idx, attack in enumerate(attacks):
-            # ── Attack Info ──
             yield _sse("attack_info", {
                 "index": idx,
                 "total": total,
@@ -136,9 +163,8 @@ async def stream_evaluation_pipeline(
                 "domain": attack.domain,
                 "risk_score": attack.risk_score,
             })
-            await asyncio.sleep(0)  # yield control
+            await asyncio.sleep(0)
 
-            # ── Input View ──
             yield _sse("attack_input", {
                 "index": idx,
                 "payload_preview": attack.payload[:300] + ("..." if len(attack.payload) > 300 else ""),
@@ -146,7 +172,6 @@ async def stream_evaluation_pipeline(
             })
             await asyncio.sleep(0)
 
-            # ── Executing ──
             yield _sse("attack_executing", {"index": idx})
 
             t_start = asyncio.get_event_loop().time()
@@ -157,7 +182,6 @@ async def stream_evaluation_pipeline(
                 yield _sse("attack_error", {"index": idx, "error": str(exc)})
                 continue
 
-            # ── LLM Response ──
             response_text = response.response_text or response.error or ""
             yield _sse("attack_response", {
                 "index": idx,
@@ -167,8 +191,11 @@ async def stream_evaluation_pipeline(
             })
             await asyncio.sleep(0)
 
-            # ── Classification ──
-            classification = classify_response(response_text)
+            cls_result = classify_response_with_confidence(
+                response_text,
+                attack_tags=getattr(attack, "tags", []),
+            )
+            classification = cls_result.classification
             severity = score_severity(classification, response_text)
             isr_contribution = 1.0 if classification in (
                 Classification.unsafe, Classification.partial
@@ -180,45 +207,49 @@ async def stream_evaluation_pipeline(
                 "severity": severity.value,
                 "isr_contribution": isr_contribution,
                 "success": isr_contribution > 0,
+                "category": attack.category.value,
+                "strategy": getattr(attack, "strategy_goal", attack.category.value),
+                "owasp_risk": cls_result.owasp_risk,
+                "signals": cls_result.signals,
+                "confidence": cls_result.confidence,
+                "name": attack.name,
             })
             await asyncio.sleep(0)
 
-            # ── Adaptive per-attack escalation ───────────────────────────────
+            # Adaptive per-attack escalation
             if isr_contribution > 0:
-                # Attack succeeded — reset failure counter
                 consecutive_failures = 0
             else:
-                # Attack failed (model defended) — count up
                 consecutive_failures += 1
                 if consecutive_failures >= 2 and enable_escalation:
-                    # After 2 consecutive failures, escalate immediately
                     new_level = min(current_level + 1, max_level)
                     if new_level > current_level:
                         current_level = new_level
                         consecutive_failures = 0
                         yield _sse("strategy_change", {
                             "index": idx,
-                            "reason": f"Model defended {consecutive_failures+1} attacks — escalating to L{new_level}",
+                            "reason": f"Model defended — escalating to L{new_level}",
                             "new_level": new_level,
                             "action": "escalate",
                         })
-                        await asyncio.sleep(0)
 
-            # Store result
-            er = EvaluationResult(
-                run_id=run.id,
-                attack_id=attack.attack_id,
-                attack_name=attack.name,
-                attack_payload=attack.payload,
-                response_text=response_text,
-                classification=classification,
-                severity=severity,
-                latency_ms=elapsed_ms,
-                tokens_used=response.tokens_used,
-                isr_contribution=isr_contribution,
-            )
-            session.add(er)
-            eval_results.append(er)
+            # Accumulate for bulk write (no DB access here)
+            eval_result_rows.append({
+                "run_id": run_id,
+                "attack_id": attack.attack_id,
+                "attack_name": attack.name,
+                "attack_payload": attack.payload,
+                "response_text": response_text,
+                "classification": classification,
+                "severity": severity,
+                "latency_ms": elapsed_ms,
+                "tokens_used": response.tokens_used,
+                "isr_contribution": isr_contribution,
+                "attack_category": attack.category.value,
+                "attack_strategy": getattr(attack, "strategy_goal", attack.category.value),
+                "owasp_risk": cls_result.owasp_risk,
+                "signals": cls_result.signals,
+            })
 
             result_dicts.append({
                 "attack_id": attack.attack_id,
@@ -228,9 +259,10 @@ async def stream_evaluation_pipeline(
                 "classification": classification,
                 "severity": severity,
                 "response_text": response_text,
+                "isr_contribution": isr_contribution,
             })
 
-            # ── Live ISR update ──
+            # Live ISR update
             if result_dicts:
                 live_isr = sum(r["classification"] in (Classification.unsafe, Classification.partial)
                                for r in result_dicts) / len(result_dicts)
@@ -243,7 +275,7 @@ async def stream_evaluation_pipeline(
                     "current_level": attack.level,
                 })
 
-            # ── Escalation check every 5 attacks (macro-level) ──
+            # Macro escalation check every 5 attacks
             if enable_escalation and (idx + 1) % 5 == 0 and idx < total - 1:
                 partial_metrics = compute_isr(result_dicts)
                 failed_cats = [
@@ -266,13 +298,29 @@ async def stream_evaluation_pipeline(
                     })
                     current_level = new_level
 
-            await asyncio.sleep(0)  # cooperative yield
+            await asyncio.sleep(0)
 
-        await session.flush()
+        # ── Bulk write all EvaluationResult rows (single short-lived session) ──
+        async def _save_results(session):
+            for row in eval_result_rows:
+                er = EvaluationResult(**row)
+                session.add(er)
+            await session.flush()
+
+        await _db_write(_save_results)
 
         # ── Stage 4: ISR metrics ───────────────────────────────────────────
         isr_metrics = compute_isr(result_dicts)
-        run.global_isr = isr_metrics.global_isr
+        global_isr = isr_metrics.global_isr
+
+        async def _update_isr(session):
+            from sqlalchemy import select, update
+            from backend.models.evaluation import EvaluationRun
+            await session.execute(
+                update(EvaluationRun).where(EvaluationRun.id == run_id).values(global_isr=global_isr)
+            )
+
+        await _db_write(_update_isr)
 
         yield _sse("stage_isr", {
             "global_isr": isr_metrics.global_isr,
@@ -286,17 +334,23 @@ async def stream_evaluation_pipeline(
         yield _sse("stage_rca_start", {"message": "Analyzing root causes..."})
 
         rca_data = rca_analyze(result_dicts, request.system_prompt)
-        rca_report = RCAReport(
-            run_id=run.id,
-            root_causes=rca_data["root_causes"],
-            patterns=rca_data["patterns"],
-            affected_prompt_sections=rca_data["affected_prompt_sections"],
-            behavioral_analysis=rca_data["behavioral_analysis"],
-            architectural_findings=rca_data["architectural_findings"],
-            attack_trace=rca_data["attack_trace"],
-        )
-        session.add(rca_report)
-        await session.flush()
+
+        rca_report_id: int = 0
+        async def _save_rca(session):
+            rca_report = RCAReport(
+                run_id=run_id,
+                root_causes=rca_data["root_causes"],
+                patterns=rca_data["patterns"],
+                affected_prompt_sections=rca_data["affected_prompt_sections"],
+                behavioral_analysis=rca_data["behavioral_analysis"],
+                architectural_findings=rca_data["architectural_findings"],
+                attack_trace=rca_data["attack_trace"],
+            )
+            session.add(rca_report)
+            await session.flush()
+            return rca_report.id
+
+        rca_report_id = await _db_write(_save_rca)
 
         yield _sse("stage_rca_done", {
             "root_causes": rca_data["root_causes"],
@@ -313,15 +367,20 @@ async def stream_evaluation_pipeline(
         hardened = harden_prompt(request.system_prompt, vuln_cats)
         guardrails = generate_guardrails(vuln_cats)
 
-        plan = MitigationPlan(
-            run_id=run.id,
-            strategy=strategy,
-            original_system_prompt=request.system_prompt,
-            hardened_prompt=hardened,
-            guardrails=guardrails,
-        )
-        session.add(plan)
-        await session.flush()
+        plan_id: int = 0
+        async def _save_plan(session):
+            plan = MitigationPlan(
+                run_id=run_id,
+                strategy=strategy,
+                original_system_prompt=request.system_prompt,
+                hardened_prompt=hardened,
+                guardrails=guardrails,
+            )
+            session.add(plan)
+            await session.flush()
+            return plan.id
+
+        plan_id = await _db_write(_save_plan)
 
         yield _sse("stage_mitigation_done", {
             "strategy": strategy,
@@ -335,16 +394,23 @@ async def stream_evaluation_pipeline(
         hardened_config = LLMConfig(model=request.model, system_prompt=hardened)
         retest_attacks = attacks[:min(len(attacks), 10)]
         retest_result_dicts: List[Dict] = []
+        retest_rows: List[Dict] = []
 
-        retest_run = EvaluationRun(
-            provider=request.provider,
-            model=request.model,
-            system_prompt=hardened,
-            status=RunStatus.running,
-            started_at=datetime.utcnow(),
-        )
-        session.add(retest_run)
-        await session.flush()
+        # Create retest run record
+        retest_run_id: int = 0
+        async def _create_retest_run(session):
+            retest_run = EvaluationRun(
+                provider=request.provider,
+                model=request.model,
+                system_prompt=hardened,
+                status=RunStatus.running,
+                started_at=datetime.utcnow(),
+            )
+            session.add(retest_run)
+            await session.flush()
+            return retest_run.id
+
+        retest_run_id = await _db_write(_create_retest_run)
 
         for rt_attack in retest_attacks:
             try:
@@ -354,18 +420,18 @@ async def stream_evaluation_pipeline(
             rt_text = rt_response.response_text or ""
             rt_cls = classify_response(rt_text)
             rt_sev = score_severity(rt_cls, rt_text)
-            retest_run_result = EvaluationResult(
-                run_id=retest_run.id,
-                attack_name=rt_attack.name,
-                attack_payload=rt_attack.payload,
-                response_text=rt_text,
-                classification=rt_cls,
-                severity=rt_sev,
-                latency_ms=0,
-                tokens_used=rt_response.tokens_used,
-                isr_contribution=1.0 if rt_cls in (Classification.unsafe, Classification.partial) else 0.0,
-            )
-            session.add(retest_run_result)
+            rt_isr = 1.0 if rt_cls in (Classification.unsafe, Classification.partial) else 0.0
+            retest_rows.append({
+                "run_id": retest_run_id,
+                "attack_name": rt_attack.name,
+                "attack_payload": rt_attack.payload,
+                "response_text": rt_text,
+                "classification": rt_cls,
+                "severity": rt_sev,
+                "latency_ms": 0,
+                "tokens_used": rt_response.tokens_used,
+                "isr_contribution": rt_isr,
+            })
             retest_result_dicts.append({
                 "classification": rt_cls,
                 "severity": rt_sev,
@@ -377,23 +443,33 @@ async def stream_evaluation_pipeline(
 
         retest_isr_metrics = compute_isr(retest_result_dicts) if retest_result_dicts else isr_metrics
         hardened_isr = retest_isr_metrics.global_isr
-        retest_run.global_isr = hardened_isr
-        retest_run.status = RunStatus.completed
-        retest_run.completed_at = datetime.utcnow()
-
         improvement_pct = (
             (isr_metrics.global_isr - hardened_isr) / isr_metrics.global_isr * 100
             if isr_metrics.global_isr > 0 else 0.0
         )
 
-        mitigation_result = MitigationResult(
-            plan_id=plan.id,
-            original_isr=isr_metrics.global_isr,
-            hardened_isr=hardened_isr,
-            improvement_pct=round(improvement_pct, 2),
-            retest_run_id=retest_run.id,
-        )
-        session.add(mitigation_result)
+        # Save retest results + mitigation result in one shot
+        async def _save_retest(session):
+            from sqlalchemy import update
+            from backend.models.evaluation import EvaluationRun
+            for row in retest_rows:
+                session.add(EvaluationResult(**row))
+            await session.execute(
+                update(EvaluationRun).where(EvaluationRun.id == retest_run_id).values(
+                    global_isr=hardened_isr,
+                    status=RunStatus.completed,
+                    completed_at=datetime.utcnow(),
+                )
+            )
+            session.add(MitigationResult(
+                plan_id=plan_id,
+                original_isr=isr_metrics.global_isr,
+                hardened_isr=hardened_isr,
+                improvement_pct=round(improvement_pct, 2),
+                retest_run_id=retest_run_id,
+            ))
+
+        await _db_write(_save_retest)
 
         yield _sse("stage_retest_done", {
             "original_isr": isr_metrics.global_isr,
@@ -402,10 +478,12 @@ async def stream_evaluation_pipeline(
         })
 
         # ── Stage 8: Learning + Seed Promotion ────────────────────────────
-        yield _sse("stage_learning_start", {"message": "Storing insights and promoting high-value attacks..."})
-        await store_evaluation_results(session, request.provider, request.model, result_dicts)
+        yield _sse("stage_learning_start", {"message": "Storing insights..."})
 
-        # Promote high-performing attacks into the seed library
+        await _db_write(
+            lambda s: store_evaluation_results(s, request.provider, request.model, result_dicts)
+        )
+
         seeds_promoted = 0
         for rd in result_dicts:
             if rd["classification"] in (Classification.unsafe, Classification.partial):
@@ -413,9 +491,10 @@ async def stream_evaluation_pipeline(
                     attack_id=rd.get("attack_id", "unknown"),
                     attack_name=rd.get("attack_name", "unknown"),
                     category=rd.get("category", "unknown"),
-                    strategy=rd.get("attack_payload", "")[:50],  # use payload prefix as strategy hint
+                    strategy=rd.get("attack_payload", "")[:50],
                     prompt=rd.get("attack_payload", ""),
-                    severity=rd.get("severity", Classification.partial).value if hasattr(rd.get("severity"), "value") else str(rd.get("severity", "medium")),
+                    severity=rd.get("severity", Classification.partial).value
+                        if hasattr(rd.get("severity"), "value") else str(rd.get("severity", "medium")),
                     success_rate=rd.get("isr_contribution", 1.0),
                     source=f"{request.provider}/{request.model}",
                 )
@@ -427,13 +506,21 @@ async def stream_evaluation_pipeline(
             "seeds_promoted": seeds_promoted,
         })
 
-        # ── Finalize ───────────────────────────────────────────────────────
-        run.status = RunStatus.completed
-        run.completed_at = datetime.utcnow()
-        await session.commit()
+        # ── Finalize main run ──────────────────────────────────────────────
+        async def _finalize(session):
+            from sqlalchemy import update
+            from backend.models.evaluation import EvaluationRun
+            await session.execute(
+                update(EvaluationRun).where(EvaluationRun.id == run_id).values(
+                    status=RunStatus.completed,
+                    completed_at=datetime.utcnow(),
+                )
+            )
+
+        await _db_write(_finalize)
 
         yield _sse("complete", {
-            "run_id": run.id,
+            "run_id": run_id,
             "provider": request.provider,
             "model": request.model,
             "global_isr": isr_metrics.global_isr,
@@ -450,11 +537,18 @@ async def stream_evaluation_pipeline(
         })
 
     except Exception as exc:
-        run.status = RunStatus.failed
-        run.completed_at = datetime.utcnow()
+        log.error("streaming_pipeline.failed", run_id=run_id, error=str(exc))
         try:
-            await session.commit()
+            async def _fail(session):
+                from sqlalchemy import update
+                from backend.models.evaluation import EvaluationRun
+                await session.execute(
+                    update(EvaluationRun).where(EvaluationRun.id == run_id).values(
+                        status=RunStatus.failed,
+                        completed_at=datetime.utcnow(),
+                    )
+                )
+            await _db_write(_fail)
         except Exception:
             pass
-        log.error("streaming_pipeline.failed", run_id=run.id, error=str(exc))
-        yield _sse("error", {"message": str(exc), "run_id": run.id})
+        yield _sse("error", {"message": str(exc), "run_id": run_id})

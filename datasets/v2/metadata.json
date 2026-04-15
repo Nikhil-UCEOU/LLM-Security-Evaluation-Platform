@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "created": "2026-04-15",
+  "description": "CortexFlow AI v2 Attack Dataset — Comprehensive adversarial attack library covering all OWASP LLM Top 10 risks with taxonomy-driven, strategy-based attacks across 7 categories.",
+  "sources": [
+    "jailbreak_llms (Shen et al., 2023)",
+    "Awesome-Jailbreak-on-LLMs (yueliu1999)",
+    "pr1m8/prompt-injections taxonomy",
+    "PayloadsAllTheThings LLM Injection",
+    "IBM Adversarial Prompt Evaluation",
+    "OWASP LLM Top 10 reference cases",
+    "AhsanAyub malicious-prompt-detection corpus",
+    "Vigil-LLM test cases",
+    "Kaggle prompt-injection-malignant dataset patterns",
+    "MITRE ATLAS attack taxonomy"
+  ],
+  "total_attacks": 255,
+  "categories": {
+    "jailbreak": {
+      "count": 120,
+      "description": "Persona-override and identity-hijacking attacks including DAN variants, encoding bypasses, cognitive/social engineering, and multi-turn escalation",
+      "subcategories": ["persona_override", "encoding_bypass", "cognitive_social_engineering", "multi_turn", "system_level"]
+    },
+    "prompt_injection": {
+      "count": 60,
+      "description": "Instruction hijacking attacks covering direct injection, indirect/RAG injection, document poisoning, and tool output injection",
+      "subcategories": ["direct_injection", "indirect_injection", "document_poison", "separator_injection", "encoding_injection"]
+    },
+    "encoding_attacks": {
+      "count": 20,
+      "description": "Obfuscation and encoding attacks: base64, unicode, homoglyphs, steganography, multi-layer encoding chains",
+      "subcategories": ["base64", "unicode_bypass", "steganography", "cipher", "mixed_encoding"]
+    },
+    "cognitive_attacks": {
+      "count": 20,
+      "description": "Social engineering and psychological manipulation: authority claims, urgency, flattery, guilt, Cialdini principles",
+      "subcategories": ["authority", "urgency", "flattery", "emotional_manipulation", "social_proof"]
+    },
+    "system_level_attacks": {
+      "count": 25,
+      "description": "System-level attacks targeting RAG pipelines, tool outputs, agent workflows, memory systems, and API parameters",
+      "subcategories": ["rag_poisoning", "tool_misuse", "indirect_injection", "api_abuse", "agent_hijack"]
+    },
+    "owasp_aligned": {
+      "count": 16,
+      "description": "Attacks directly mapped to OWASP LLM Top 10 risks (LLM01-LLM10) for compliance benchmarking",
+      "subcategories": ["LLM01", "LLM02", "LLM03", "LLM04", "LLM05", "LLM06", "LLM07", "LLM08", "LLM09", "LLM10"]
+    },
+    "rag_poisoning": {
+      "count": 8,
+      "description": "Attacks targeting retrieval-augmented generation pipelines via vector DB poisoning and document injection",
+      "subcategories": ["vector_db_poison", "document_injection", "cross_user_contamination"]
+    }
+  },
+  "owasp_coverage": {
+    "LLM01": {"name": "Prompt Injection", "attacks": 85},
+    "LLM02": {"name": "Insecure Output Handling", "attacks": 8},
+    "LLM03": {"name": "Training Data Poisoning", "attacks": 25},
+    "LLM04": {"name": "Model Denial of Service", "attacks": 5},
+    "LLM05": {"name": "Supply Chain Vulnerabilities", "attacks": 5},
+    "LLM06": {"name": "Sensitive Information Disclosure", "attacks": 12},
+    "LLM07": {"name": "Insecure Plugin Design", "attacks": 18},
+    "LLM08": {"name": "Excessive Agency", "attacks": 8},
+    "LLM09": {"name": "Overreliance", "attacks": 4},
+    "LLM10": {"name": "Model Theft", "attacks": 5}
+  },
+  "severity_distribution": {
+    "critical": 72,
+    "high": 98,
+    "medium": 68,
+    "low": 17
+  },
+  "difficulty_levels": {
+    "L1": {"range": "trivial", "count": 45, "description": "Single-turn direct overrides, detectable phrases"},
+    "L2": {"range": "easy", "count": 55, "description": "Structured persona attacks with confirmation phrases"},
+    "L3": {"range": "moderate", "count": 78, "description": "Encoding, cognitive, context manipulation"},
+    "L4": {"range": "hard", "count": 52, "description": "Multi-turn, system-level, RAG attacks"},
+    "L5": {"range": "advanced", "count": 25, "description": "Chained, adversarial, self-replicating attacks"}
+  }
+}

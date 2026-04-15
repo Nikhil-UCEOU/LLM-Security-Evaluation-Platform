@@ -8,6 +8,7 @@ import Mitigation from './pages/Mitigation'
 import Learning from './pages/Learning'
 import Settings from './pages/Settings'
 import Benchmark from './pages/Benchmark'
+import RiskDashboard from './pages/RiskDashboard'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/mitigation/:runId" element={<Mitigation />} />
           <Route path="/learning" element={<Learning />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/risk" element={<RiskDashboard />} />
         </Routes>
       </main>
     </div>

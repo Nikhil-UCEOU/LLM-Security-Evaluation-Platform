@@ -2,13 +2,12 @@
 SSE Streaming Evaluation Endpoint
 Streams the entire evaluation pipeline as Server-Sent Events.
 """
-from fastapi import APIRouter, Depends, Request, Form, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_db, verify_api_key
+from backend.api.deps import verify_api_key
 from backend.schemas.evaluation import EvaluationRunRequest
 from backend.services.streaming_pipeline_service import stream_evaluation_pipeline
 from backend.modules.context_detector.auto_context_detector import detect_context
@@ -34,18 +33,15 @@ class StreamEvalRequest(BaseModel):
 @router.post("/evaluate")
 async def stream_evaluate(
     body: StreamEvalRequest,
-    db: AsyncSession = Depends(get_db),
     _: str = Depends(verify_api_key),
 ):
     """
     Stream the full evaluation pipeline as SSE events.
-    Each attack produces multiple events:
-    attack_info → attack_input → attack_executing → attack_response → attack_classified
-    Then: stage_rca → stage_mitigation → stage_retest → complete
+    No long-lived DB session is held — the pipeline creates its own short-lived
+    sessions per write to avoid SQLite locking.
     """
     from backend.models.attack import AttackCategory
 
-    # Map string categories to enum
     cats = []
     for c in body.attack_categories:
         try:
@@ -65,7 +61,6 @@ async def stream_evaluate(
     async def generator():
         async for event in stream_evaluation_pipeline(
             request=run_request,
-            session=db,
             document_content=body.document_content,
             api_schema=body.api_schema,
             enable_mutation=body.enable_mutation,
@@ -91,9 +86,6 @@ async def detect_context_endpoint(
     body: dict,
     _: str = Depends(verify_api_key),
 ) -> dict:
-    """
-    Quick endpoint: detect domain and app type from system prompt + optional inputs.
-    """
     result = detect_context(
         system_prompt=body.get("system_prompt", ""),
         document_content=body.get("document_content", ""),

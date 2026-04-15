@@ -3,6 +3,7 @@ from backend.modules.gateway.base_provider import BaseLLMProvider, LLMConfig, LL
 from backend.modules.gateway.openai_provider import OpenAIProvider
 from backend.modules.gateway.anthropic_provider import AnthropicProvider
 from backend.modules.gateway.ollama_provider import OllamaProvider
+from backend.modules.gateway.huggingface_provider import HuggingFaceProvider
 from backend.core.exceptions import ProviderNotFoundError, ProviderAuthError
 
 
@@ -10,6 +11,7 @@ _REGISTRY: Dict[str, Type[BaseLLMProvider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "ollama": OllamaProvider,
+    "huggingface": HuggingFaceProvider,
 }
 
 _instances: Dict[str, BaseLLMProvider] = {}

@@ -1,6 +1,7 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Enum, Float, ForeignKey, Integer
+from sqlalchemy import String, Text, DateTime, Enum, Float, ForeignKey, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, List
 from backend.core.database import Base
 import enum
 
@@ -56,6 +57,10 @@ class EvaluationResult(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     isr_contribution: Mapped[float] = mapped_column(Float, default=0.0)
+    attack_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    attack_strategy: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    owasp_risk: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    signals: Mapped[Optional[List]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     run: Mapped["EvaluationRun"] = relationship("EvaluationRun", back_populates="results")

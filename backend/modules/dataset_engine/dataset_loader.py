@@ -159,7 +159,10 @@ def load_dataset_file(path: str, source: Optional[str] = None) -> List[Normalize
     raw = p.read_text(encoding="utf-8")
 
     if p.suffix == ".json":
-        data = json.loads(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
         if isinstance(data, list):
             return _parse_json_array(data, src)
         elif isinstance(data, dict) and "attacks" in data:
