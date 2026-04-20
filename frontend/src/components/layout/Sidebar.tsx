@@ -1,8 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Zap, Shield, BookOpen,
-  Settings, Brain, BarChart3, GitBranch,
-  ShieldAlert,
+  Settings, Brain, BarChart3, GitBranch, ShieldAlert,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -14,7 +13,6 @@ const nav = [
   { to: '/attacks',    icon: BookOpen,          label: 'Attack Library', step: null },
   { to: '/benchmark',  icon: BarChart3,         label: 'Benchmark',      step: null, accent: true },
   { to: '/risk',       icon: ShieldAlert,       label: 'Risk Dashboard', step: null },
-  { to: '/learning',   icon: Brain,             label: 'Intelligence',   step: null },
   { to: '/settings',   icon: Settings,          label: 'Settings',       step: null },
 ]
 

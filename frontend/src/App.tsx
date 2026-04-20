@@ -5,7 +5,6 @@ import EvaluationRun from './pages/EvaluationRun'
 import AttackLibrary from './pages/AttackLibrary'
 import Results from './pages/Results'
 import Mitigation from './pages/Mitigation'
-import Learning from './pages/Learning'
 import Settings from './pages/Settings'
 import Benchmark from './pages/Benchmark'
 import RiskDashboard from './pages/RiskDashboard'
@@ -24,7 +23,6 @@ export default function App() {
           <Route path="/results/:runId" element={<Results />} />
           <Route path="/mitigation" element={<Mitigation />} />
           <Route path="/mitigation/:runId" element={<Mitigation />} />
-          <Route path="/learning" element={<Learning />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/risk" element={<RiskDashboard />} />
         </Routes>
